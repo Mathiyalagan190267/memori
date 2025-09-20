@@ -277,12 +277,26 @@ class MongoDBDatabaseManager:
             st_collection.create_index([("created_at", -1)], background=True)
             st_collection.create_index([("is_permanent_context", 1)], background=True)
             
-            # Text search index for short-term memory
+            # Enhanced text search index for short-term memory with weights
             try:
-                st_collection.create_index([("searchable_content", "text"), ("summary", "text")], background=True)
+                st_collection.create_index(
+                    [
+                        ("searchable_content", "text"),
+                        ("summary", "text"),
+                        ("topic", "text")
+                    ],
+                    background=False,
+                    weights={
+                        "searchable_content": 10,  # Highest weight for main content
+                        "summary": 5,              # Medium weight for summary
+                        "topic": 3                 # Lower weight for topic
+                    },
+                    name="text_search_index"
+                )
+                logger.info("Created enhanced text search index for short-term memory with weights")
             except Exception as e:
-                logger.debug(f"Text index creation failed (may already exist): {e}")
-            
+                logger.warning(f"Text index creation failed for short-term memory: {e}")
+
             # Long-term memory indexes
             lt_collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
             lt_collection.create_index([("memory_id", 1)], unique=True, background=True)
@@ -293,18 +307,78 @@ class MongoDBDatabaseManager:
             lt_collection.create_index([("conscious_processed", 1)], background=True)
             lt_collection.create_index([("processed_for_duplicates", 1)], background=True)
             lt_collection.create_index([("promotion_eligible", 1)], background=True)
-            
-            # Text search index for long-term memory
+
+            # Enhanced text search index for long-term memory with weights
             try:
-                lt_collection.create_index([("searchable_content", "text"), ("summary", "text"), ("topic", "text")], background=True)
+                lt_collection.create_index(
+                    [
+                        ("searchable_content", "text"),
+                        ("summary", "text"),
+                        ("topic", "text"),
+                        ("classification_reason", "text")
+                    ],
+                    background=False,
+                    weights={
+                        "searchable_content": 10,      # Highest weight for main content
+                        "summary": 8,                  # High weight for summary
+                        "topic": 5,                    # Medium weight for topic
+                        "classification_reason": 2    # Lower weight for reasoning
+                    },
+                    name="text_search_index"
+                )
+                logger.info("Created enhanced text search index for long-term memory with weights")
             except Exception as e:
-                logger.debug(f"Text index creation failed (may already exist): {e}")
+                logger.warning(f"Text index creation failed for long-term memory: {e}")
             
+            # Verify text indexes are functional
+            self._verify_text_indexes()
+
             logger.debug("MongoDB indexes created successfully")
-            
+
         except Exception as e:
             logger.warning(f"Failed to create some MongoDB indexes: {e}")
-    
+
+    def _verify_text_indexes(self):
+        """Verify that text indexes are functional by performing test searches"""
+        try:
+            # Test short-term memory text index
+            st_collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+            try:
+                # Perform a simple text search to verify index works
+                test_result = st_collection.find_one({"$text": {"$search": "test"}})
+                logger.debug("Short-term memory text index verification successful")
+            except Exception as e:
+                logger.warning(f"Short-term memory text index may not be functional: {e}")
+
+            # Test long-term memory text index
+            lt_collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+            try:
+                # Perform a simple text search to verify index works
+                test_result = lt_collection.find_one({"$text": {"$search": "test"}})
+                logger.debug("Long-term memory text index verification successful")
+            except Exception as e:
+                logger.warning(f"Long-term memory text index may not be functional: {e}")
+
+            # Check if text indexes exist
+            st_indexes = list(st_collection.list_indexes())
+            lt_indexes = list(lt_collection.list_indexes())
+
+            st_has_text_index = any("text" in idx.get("key", {}).values() for idx in st_indexes)
+            lt_has_text_index = any("text" in idx.get("key", {}).values() for idx in lt_indexes)
+
+            if st_has_text_index:
+                logger.info("Short-term memory collection has text index")
+            else:
+                logger.warning("Short-term memory collection missing text index")
+
+            if lt_has_text_index:
+                logger.info("Long-term memory collection has text index")
+            else:
+                logger.warning("Long-term memory collection missing text index")
+
+        except Exception as e:
+            logger.error(f"Text index verification failed: {e}")
+
     def store_chat_history(
         self,
         chat_id: str,
@@ -387,6 +461,26 @@ class MongoDBDatabaseManager:
         try:
             collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
             
+            # Enrich searchable content with keywords and entities for better search
+            enriched_content_parts = [memory.content]
+
+            # Add summary for richer search content
+            if memory.summary and memory.summary.strip():
+                enriched_content_parts.append(memory.summary)
+
+            # Add keywords to searchable content
+            if memory.keywords:
+                keyword_text = " ".join(memory.keywords)
+                enriched_content_parts.append(keyword_text)
+
+            # Add entities to searchable content
+            if memory.entities:
+                entity_text = " ".join(memory.entities)
+                enriched_content_parts.append(entity_text)
+
+            # Create enriched searchable content
+            enriched_searchable_content = " ".join(enriched_content_parts)
+
             # Convert Pydantic model to MongoDB document
             document = {
                 'memory_id': memory_id,
@@ -397,7 +491,7 @@ class MongoDBDatabaseManager:
                 'retention_type': "long_term",
                 'namespace': namespace,
                 'created_at': datetime.now(timezone.utc),
-                'searchable_content': memory.content,
+                'searchable_content': enriched_searchable_content,
                 'summary': memory.summary,
                 'novelty_score': 0.5,
                 'relevance_score': 0.5,
@@ -443,189 +537,120 @@ class MongoDBDatabaseManager:
         category_filter: Optional[List[str]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Search memories using MongoDB text search and fallback strategies"""
+        """Search memories using MongoDB text search only (no fallbacks)"""
         try:
+            logger.info(f"Starting MongoDB text search for query: '{query}' in namespace: '{namespace}'")
+
+            # Return empty results for empty queries
+            if not query or not query.strip():
+                logger.debug("Empty query provided, returning empty results")
+                return []
+
             results = []
             collections_to_search = [
                 (self.SHORT_TERM_MEMORY_COLLECTION, 'short_term'),
                 (self.LONG_TERM_MEMORY_COLLECTION, 'long_term')
             ]
-            
-            # If query is empty, return recent memories
-            if not query or not query.strip():
-                return self._get_recent_memories(namespace, category_filter, limit)
-            
-            # Try text search first
+
+            # Search each collection using MongoDB text search
             for collection_name, memory_type in collections_to_search:
                 collection = self._get_collection(collection_name)
-                
+                logger.debug(f"Searching {memory_type} memories in collection: {collection_name}")
+
                 try:
-                    # Build search filter
+                    # Build base search filter with text search
                     search_filter = {
                         '$text': {'$search': query},
                         'namespace': namespace
                     }
-                    
+
+                    # Add category filter if specified
                     if category_filter:
                         search_filter['category_primary'] = {'$in': category_filter}
-                    
+                        logger.debug(f"Applied category filter: {category_filter}")
+
                     # For short-term memories, exclude expired ones
                     if memory_type == 'short_term':
-                        search_filter['$or'] = [
-                            {'expires_at': {'$exists': False}},
-                            {'expires_at': None},
-                            {'expires_at': {'$gt': datetime.now(timezone.utc)}}
-                        ]
-                    
-                    # Execute text search
+                        current_time = datetime.now(timezone.utc)
+                        # Combine text search filter with expiration filter
+                        search_filter = {
+                            '$and': [
+                                {'$text': {'$search': query}},
+                                {'namespace': namespace},
+                                {
+                                    '$or': [
+                                        {'expires_at': {'$exists': False}},
+                                        {'expires_at': None},
+                                        {'expires_at': {'$gt': current_time}}
+                                    ]
+                                }
+                            ]
+                        }
+                        if category_filter:
+                            search_filter['$and'].append({'category_primary': {'$in': category_filter}})
+                        logger.debug("Applied expiration filter for short-term memories")
+
+                    logger.debug(f"Executing MongoDB text search with filter: {search_filter}")
+
+                    # Execute MongoDB text search with text score projection
                     cursor = collection.find(
                         search_filter,
                         {'score': {'$meta': 'textScore'}}
                     ).sort([
                         ('score', {'$meta': 'textScore'}),
-                        ('importance_score', -1)
+                        ('importance_score', -1),
+                        ('created_at', -1)
                     ]).limit(limit)
-                    
+
+                    collection_results = []
                     for document in cursor:
                         memory = self._convert_to_dict(document)
                         memory['memory_type'] = memory_type
                         memory['search_strategy'] = 'mongodb_text'
+                        # Preserve text search score
+                        if 'score' in document:
+                            memory['text_score'] = document['score']
+                        collection_results.append(memory)
                         results.append(memory)
-                        
-                except Exception as text_error:
-                    logger.debug(f"Text search failed for {collection_name}: {text_error}")
-                    # Fall back to regex search for this collection
-                    results.extend(self._regex_search_collection(
-                        collection, memory_type, query, namespace, category_filter, limit
-                    ))
-            
-            # Sort all results by search score and importance
+
+                    logger.info(f"MongoDB text search found {len(collection_results)} results in {memory_type} collection")
+
+                    if collection_results:
+                        logger.debug(f"Top result from {memory_type}: score={collection_results[0].get('text_score', 'N/A')}, content='{collection_results[0].get('searchable_content', '')[:50]}...'")
+
+                except Exception as search_error:
+                    logger.error(f"MongoDB text search failed for {collection_name}: {search_error}")
+                    logger.error(f"This indicates a problem with text indexes or query structure")
+                    # Don't fall back - let the error surface so we can fix the root cause
+                    continue
+
+            # Sort all results by text search score first, then importance
             results.sort(
                 key=lambda x: (
-                    x.get('score', 0),
+                    x.get('text_score', 0),
                     x.get('importance_score', 0)
                 ),
                 reverse=True
             )
-            
-            logger.debug(f"Memory search returned {len(results)} results for query: {query}")
+
+            logger.info(f"MongoDB text search completed: {len(results)} total results for query: '{query}'")
+
+            if results:
+                logger.debug(f"Best match: score={results[0].get('text_score', 'N/A')}, content='{results[0].get('searchable_content', '')[:100]}...'")
+            else:
+                logger.warning(f"MongoDB text search found no results for query: '{query}' in namespace: '{namespace}'")
+                logger.warning("This may indicate:")
+                logger.warning("1. No content matches the search terms")
+                logger.warning("2. Text indexes are not properly created")
+                logger.warning("3. searchable_content fields are not populated")
+
             return results[:limit]
-            
+
         except Exception as e:
-            logger.error(f"Memory search failed: {e}")
+            logger.error(f"MongoDB text search failed: {e}", exc_info=True)
             return []
     
-    def _regex_search_collection(
-        self, 
-        collection: Collection, 
-        memory_type: str, 
-        query: str, 
-        namespace: str,
-        category_filter: Optional[List[str]] = None,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Perform regex search on a collection as fallback"""
-        try:
-            # Create case-insensitive regex pattern
-            regex_pattern = {'$regex': query, '$options': 'i'}
-            
-            # Build search filter using regex
-            search_filter = {
-                '$or': [
-                    {'searchable_content': regex_pattern},
-                    {'summary': regex_pattern}
-                ],
-                'namespace': namespace
-            }
-            
-            if category_filter:
-                search_filter['category_primary'] = {'$in': category_filter}
-            
-            # For short-term memories, exclude expired ones
-            if memory_type == 'short_term':
-                current_time = datetime.now(timezone.utc)
-                search_filter['$and'] = [
-                    search_filter,
-                    {
-                        '$or': [
-                            {'expires_at': {'$exists': False}},
-                            {'expires_at': None},
-                            {'expires_at': {'$gt': current_time}}
-                        ]
-                    }
-                ]
-            
-            # Execute regex search
-            cursor = collection.find(search_filter).sort([
-                ('importance_score', -1),
-                ('created_at', -1)
-            ]).limit(limit)
-            
-            results = []
-            for document in cursor:
-                memory = self._convert_to_dict(document)
-                memory['memory_type'] = memory_type
-                memory['search_strategy'] = 'regex_fallback'
-                results.append(memory)
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Regex search failed: {e}")
-            return []
     
-    def _get_recent_memories(
-        self, 
-        namespace: str = "default", 
-        category_filter: Optional[List[str]] = None, 
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Get recent memories when no search query provided"""
-        try:
-            results = []
-            collections_to_search = [
-                (self.SHORT_TERM_MEMORY_COLLECTION, 'short_term'),
-                (self.LONG_TERM_MEMORY_COLLECTION, 'long_term')
-            ]
-            
-            for collection_name, memory_type in collections_to_search:
-                collection = self._get_collection(collection_name)
-                
-                # Build filter
-                filter_doc = {'namespace': namespace}
-                
-                if category_filter:
-                    filter_doc['category_primary'] = {'$in': category_filter}
-                
-                # For short-term memories, exclude expired ones
-                if memory_type == 'short_term':
-                    current_time = datetime.now(timezone.utc)
-                    filter_doc['$or'] = [
-                        {'expires_at': {'$exists': False}},
-                        {'expires_at': None},
-                        {'expires_at': {'$gt': current_time}}
-                    ]
-                
-                # Get recent memories
-                cursor = collection.find(filter_doc).sort([
-                    ('importance_score', -1),
-                    ('created_at', -1)
-                ]).limit(limit // 2)  # Split limit between collections
-                
-                for document in cursor:
-                    memory = self._convert_to_dict(document)
-                    memory['memory_type'] = memory_type
-                    memory['search_strategy'] = 'recent_memories'
-                    results.append(memory)
-            
-            # Sort by importance and creation time
-            results.sort(key=lambda x: (x.get('importance_score', 0), x.get('created_at', '')), reverse=True)
-            
-            return results[:limit]
-            
-        except Exception as e:
-            logger.error(f"Failed to get recent memories: {e}")
-            return []
     
     def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
         """Get comprehensive memory statistics"""
