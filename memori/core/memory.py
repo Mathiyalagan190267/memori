@@ -22,7 +22,7 @@ except ImportError:
 from ..agents.conscious_agent import ConsciouscAgent
 from ..config.memory_manager import MemoryManager
 from ..config.settings import LoggingSettings, LogLevel
-from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager as DatabaseManager
+from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager
 from ..utils.exceptions import DatabaseError, MemoriError
 from ..utils.logging import LoggingManager
 from ..utils.pydantic_models import ConversationContext
@@ -185,8 +185,8 @@ class Memori:
         # Setup logging based on verbose mode
         self._setup_logging()
 
-        # Initialize database manager
-        self.db_manager = DatabaseManager(database_connect, template, schema_init)
+        # Initialize database manager (detect MongoDB vs SQL)
+        self.db_manager = self._create_database_manager(database_connect, template, schema_init)
 
         # Initialize Pydantic-based agents
         self.memory_agent = None
@@ -318,6 +318,35 @@ class Memori:
                 logger.info(
                     "Verbose logging enabled - only loguru logs will be displayed"
                 )
+
+    def _create_database_manager(self, database_connect: str, template: str, schema_init: bool):
+        """Create appropriate database manager based on connection string"""
+        try:
+            # Detect MongoDB connection strings
+            if self._is_mongodb_connection(database_connect):
+                logger.info("Detected MongoDB connection string - using MongoDB manager")
+                try:
+                    from ..database.mongodb_manager import MongoDBDatabaseManager
+                    return MongoDBDatabaseManager(database_connect, template, schema_init)
+                except ImportError as e:
+                    raise DatabaseError(
+                        "MongoDB support requires pymongo. Install with: pip install pymongo"
+                    ) from e
+            else:
+                logger.info("Detected SQL connection string - using SQLAlchemy manager")
+                return SQLAlchemyDatabaseManager(database_connect, template, schema_init)
+                
+        except Exception as e:
+            logger.error(f"Failed to create database manager: {e}")
+            raise DatabaseError(f"Failed to initialize database manager: {e}")
+
+    def _is_mongodb_connection(self, database_connect: str) -> bool:
+        """Detect if connection string is for MongoDB"""
+        mongodb_prefixes = [
+            "mongodb://",
+            "mongodb+srv://",
+        ]
+        return any(database_connect.startswith(prefix) for prefix in mongodb_prefixes)
 
     def _setup_database(self):
         """Setup database tables based on template"""
@@ -2111,6 +2140,68 @@ class Memori:
                 logger.info("Background analysis task stopped")
         except Exception as e:
             logger.error(f"Failed to stop background analysis: {e}")
+
+    def add(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Add a memory or text to the system.
+        
+        This is a unified method that works with both SQL and MongoDB backends.
+        For simple text memories, it will be processed and categorized automatically.
+        
+        Args:
+            text: The text content to store as memory
+            metadata: Optional metadata to store with the memory
+            
+        Returns:
+            str: Unique identifier for the stored memory/conversation
+        """
+        if not self._enabled:
+            self.enable()
+            
+        # For simple text memories, we treat them as user inputs with AI acknowledgment
+        # This ensures they get processed through the normal memory pipeline
+        ai_response = "Memory recorded successfully"
+        
+        return self.record_conversation(
+            user_input=text,
+            ai_output=ai_response,
+            metadata=metadata or {"type": "manual_memory", "source": "add_method"}
+        )
+    
+    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for memories/conversations based on a query.
+        
+        This is a unified method that works with both SQL and MongoDB backends.
+        
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of matching memories with their content and metadata
+        """
+        if not self._enabled:
+            logger.warning("Memori is not enabled. Returning empty results.")
+            return []
+            
+        try:
+            # Use the existing retrieve_context method for consistency
+            return self.retrieve_context(query, limit=limit)
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return []
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get memory statistics.
+        
+        This is a unified method that works with both SQL and MongoDB backends.
+        
+        Returns:
+            Dictionary containing memory statistics
+        """
+        return self.get_memory_stats()
 
     def cleanup(self):
         """Clean up all async tasks and resources"""

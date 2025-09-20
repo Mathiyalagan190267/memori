@@ -1,0 +1,938 @@
+"""
+MongoDB-based database manager for Memori v2.0
+Provides MongoDB support parallel to SQLAlchemy with same interface
+"""
+
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+from loguru import logger
+
+try:
+    import pymongo
+    from pymongo import MongoClient
+    from pymongo.collection import Collection
+    from pymongo.database import Database
+    from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
+    from bson import ObjectId
+    PYMONGO_AVAILABLE = True
+except ImportError:
+    PYMONGO_AVAILABLE = False
+    logger.warning("pymongo not available - MongoDB support disabled")
+
+from ..utils.exceptions import DatabaseError
+from ..utils.pydantic_models import ProcessedLongTermMemory
+
+
+class MongoDBDatabaseManager:
+    """MongoDB-based database manager with interface compatible with SQLAlchemy manager"""
+    
+    def __init__(
+        self, database_connect: str, template: str = "basic", schema_init: bool = True
+    ):
+        if not PYMONGO_AVAILABLE:
+            raise DatabaseError(
+                "MongoDB support requires pymongo. Install with: pip install pymongo"
+            )
+        
+        self.database_connect = database_connect
+        self.template = template
+        self.schema_init = schema_init
+        
+        # Parse MongoDB connection string
+        self._parse_connection_string()
+        
+        # Initialize MongoDB connection
+        self.client = None
+        self.database = None
+        self.database_type = "mongodb"
+        
+        # Collection names (matching SQLAlchemy table names)
+        self.CHAT_HISTORY_COLLECTION = "chat_history"
+        self.SHORT_TERM_MEMORY_COLLECTION = "short_term_memory"
+        self.LONG_TERM_MEMORY_COLLECTION = "long_term_memory"
+        
+        # Collections cache
+        self._collections = {}
+        
+        logger.info(f"Initialized MongoDB database manager for {self.database_name}")
+    
+    def _parse_connection_string(self):
+        """Parse MongoDB connection string to extract components"""
+        try:
+            # Handle both mongodb:// and mongodb+srv:// schemes
+            parsed = urlparse(self.database_connect)
+            
+            # Extract host - ensure it's a proper hostname/IP
+            hostname = parsed.hostname
+            if hostname and hostname != 'localhost':
+                # Check if it's a valid hostname/IP, if not fall back to localhost
+                import socket
+                try:
+                    socket.gethostbyname(hostname)
+                    self.host = hostname
+                except socket.gaierror:
+                    logger.warning(f"Cannot resolve hostname '{hostname}', falling back to localhost")
+                    self.host = "localhost"
+            else:
+                self.host = hostname or "localhost"
+            
+            self.port = parsed.port or 27017
+            self.database_name = parsed.path.lstrip('/') or "memori"
+            self.username = parsed.username
+            self.password = parsed.password
+            
+            # Extract query parameters
+            self.options = {}
+            if parsed.query:
+                params = parsed.query.split('&')
+                for param in params:
+                    if '=' in param:
+                        key, value = param.split('=', 1)
+                        self.options[key] = value
+            
+            logger.debug(f"Parsed MongoDB connection: {self.host}:{self.port}/{self.database_name}")
+                        
+        except Exception as e:
+            logger.warning(f"Failed to parse MongoDB connection string: {e}")
+            # Set defaults
+            self.host = "localhost"
+            self.port = 27017
+            self.database_name = "memori"
+            self.username = None
+            self.password = None
+            self.options = {}
+    
+    def _get_client(self) -> MongoClient:
+        """Get MongoDB client connection with caching and fallbacks"""
+        if self.client is None:
+            try:
+                # Create MongoDB client with appropriate options
+                client_options = {
+                    'serverSelectionTimeoutMS': 5000,  # 5 second timeout
+                    'connectTimeoutMS': 10000,  # 10 second connect timeout
+                    'socketTimeoutMS': 10000,   # 10 second socket timeout
+                    'maxPoolSize': 50,          # Connection pool size
+                    'retryWrites': True,        # Enable retryable writes
+                    'directConnection': True    # Direct connection to avoid replica set issues
+                }
+                
+                # Add any additional options from connection string
+                client_options.update(self.options)
+                
+                # Try original connection string first
+                try:
+                    self.client = MongoClient(self.database_connect, **client_options)
+                    # Test connection
+                    self.client.admin.command('ping')
+                    logger.info(f"Connected to MongoDB using original connection string")
+                except Exception as original_error:
+                    logger.warning(f"Original connection failed: {original_error}")
+                    
+                    # Try fallback with explicit host:port
+                    fallback_uri = f"mongodb://{self.host}:{self.port}/{self.database_name}"
+                    logger.info(f"Trying fallback connection: {fallback_uri}")
+                    
+                    self.client = MongoClient(fallback_uri, **client_options)
+                    # Test connection
+                    self.client.admin.command('ping')
+                    logger.info(f"Connected to MongoDB at {self.host}:{self.port}/{self.database_name}")
+                
+            except Exception as e:
+                error_msg = f"Failed to connect to MongoDB: {e}"
+                logger.error(error_msg)
+                logger.error("Please check that:")
+                logger.error("1. MongoDB is running")
+                logger.error("2. Connection string is correct")
+                logger.error("3. Network connectivity is available")
+                raise DatabaseError(error_msg)
+                
+        return self.client
+    
+    def _get_database(self) -> Database:
+        """Get MongoDB database with caching and creation if needed"""
+        if self.database is None:
+            client = self._get_client()
+            self.database = client[self.database_name]
+            
+            # Ensure database exists by creating a dummy collection if needed
+            try:
+                # Try to get database stats - this will fail if DB doesn't exist
+                self.database.command("dbstats")
+            except Exception:
+                # Database doesn't exist, create it by creating a dummy collection
+                logger.info(f"Creating MongoDB database: {self.database_name}")
+                self.database.create_collection("_init")
+                # Remove the dummy collection
+                self.database.drop_collection("_init")
+                logger.info(f"Database {self.database_name} created successfully")
+                
+        return self.database
+    
+    def _get_collection(self, collection_name: str) -> Collection:
+        """Get MongoDB collection with caching"""
+        if collection_name not in self._collections:
+            database = self._get_database()
+            self._collections[collection_name] = database[collection_name]
+        return self._collections[collection_name]
+    
+    def _convert_datetime_fields(self, document: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert datetime strings to datetime objects"""
+        datetime_fields = ['created_at', 'expires_at', 'last_accessed', 'extraction_timestamp', 'timestamp']
+        
+        for field in datetime_fields:
+            if field in document and document[field] is not None:
+                if isinstance(document[field], str):
+                    try:
+                        # Handle various ISO format variations
+                        document[field] = datetime.fromisoformat(document[field].replace('Z', '+00:00'))
+                    except:
+                        document[field] = datetime.now(timezone.utc)
+                elif not isinstance(document[field], datetime):
+                    document[field] = datetime.now(timezone.utc)
+        
+        # Add created_at if missing
+        if 'created_at' not in document:
+            document['created_at'] = datetime.now(timezone.utc)
+        
+        return document
+    
+    def _convert_to_dict(self, document: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert MongoDB document to dictionary format compatible with SQLAlchemy results"""
+        if not document:
+            return {}
+        
+        result = document.copy()
+        
+        # Convert ObjectId to string
+        if '_id' in result:
+            result['_id'] = str(result['_id'])
+        
+        # Convert datetime objects to ISO strings for compatibility
+        datetime_fields = ['created_at', 'expires_at', 'last_accessed', 'extraction_timestamp', 'timestamp']
+        for field in datetime_fields:
+            if field in result and isinstance(result[field], datetime):
+                result[field] = result[field].isoformat()
+        
+        # Ensure JSON fields are properly handled
+        json_fields = ['processed_data', 'entities_json', 'keywords_json', 'supersedes_json', 'related_memories_json', 'metadata_json']
+        for field in json_fields:
+            if field in result and isinstance(result[field], str):
+                try:
+                    result[field] = json.loads(result[field])
+                except:
+                    pass  # Keep as string if not valid JSON
+        
+        return result
+    
+    def initialize_schema(self):
+        """Initialize MongoDB collections and indexes"""
+        if not self.schema_init:
+            logger.info("Schema initialization disabled (schema_init=False)")
+            return
+        
+        try:
+            database = self._get_database()
+            existing_collections = database.list_collection_names()
+            
+            # Create collections if they don't exist
+            collections = [
+                self.CHAT_HISTORY_COLLECTION,
+                self.SHORT_TERM_MEMORY_COLLECTION,
+                self.LONG_TERM_MEMORY_COLLECTION
+            ]
+            
+            for collection_name in collections:
+                if collection_name not in existing_collections:
+                    database.create_collection(collection_name)
+                    logger.info(f"Created MongoDB collection: {collection_name}")
+            
+            # Create indexes for performance
+            self._create_indexes()
+            
+            logger.info("MongoDB schema initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB schema: {e}")
+            raise DatabaseError(f"Failed to initialize MongoDB schema: {e}")
+    
+    def _create_indexes(self):
+        """Create essential indexes for performance"""
+        try:
+            # Chat history indexes
+            chat_collection = self._get_collection(self.CHAT_HISTORY_COLLECTION)
+            chat_collection.create_index([("chat_id", 1)], unique=True, background=True)
+            chat_collection.create_index([("namespace", 1), ("session_id", 1)], background=True)
+            chat_collection.create_index([("timestamp", -1)], background=True)
+            chat_collection.create_index([("model", 1)], background=True)
+            
+            # Short-term memory indexes
+            st_collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+            st_collection.create_index([("memory_id", 1)], unique=True, background=True)
+            st_collection.create_index([("namespace", 1), ("category_primary", 1), ("importance_score", -1)], background=True)
+            st_collection.create_index([("expires_at", 1)], background=True)
+            st_collection.create_index([("created_at", -1)], background=True)
+            st_collection.create_index([("is_permanent_context", 1)], background=True)
+            
+            # Text search index for short-term memory
+            try:
+                st_collection.create_index([("searchable_content", "text"), ("summary", "text")], background=True)
+            except Exception as e:
+                logger.debug(f"Text index creation failed (may already exist): {e}")
+            
+            # Long-term memory indexes
+            lt_collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+            lt_collection.create_index([("memory_id", 1)], unique=True, background=True)
+            lt_collection.create_index([("namespace", 1), ("category_primary", 1), ("importance_score", -1)], background=True)
+            lt_collection.create_index([("classification", 1)], background=True)
+            lt_collection.create_index([("topic", 1)], background=True)
+            lt_collection.create_index([("created_at", -1)], background=True)
+            lt_collection.create_index([("conscious_processed", 1)], background=True)
+            lt_collection.create_index([("processed_for_duplicates", 1)], background=True)
+            lt_collection.create_index([("promotion_eligible", 1)], background=True)
+            
+            # Text search index for long-term memory
+            try:
+                lt_collection.create_index([("searchable_content", "text"), ("summary", "text"), ("topic", "text")], background=True)
+            except Exception as e:
+                logger.debug(f"Text index creation failed (may already exist): {e}")
+            
+            logger.debug("MongoDB indexes created successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to create some MongoDB indexes: {e}")
+    
+    def store_chat_history(
+        self,
+        chat_id: str,
+        user_input: str,
+        ai_output: str,
+        model: str,
+        timestamp: datetime,
+        session_id: str,
+        namespace: str = "default",
+        tokens_used: int = 0,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Store chat history in MongoDB"""
+        try:
+            collection = self._get_collection(self.CHAT_HISTORY_COLLECTION)
+            
+            document = {
+                'chat_id': chat_id,
+                'user_input': user_input,
+                'ai_output': ai_output,
+                'model': model,
+                'timestamp': timestamp,
+                'session_id': session_id,
+                'namespace': namespace,
+                'tokens_used': tokens_used,
+                'metadata_json': metadata or {}
+            }
+            
+            # Convert datetime fields
+            document = self._convert_datetime_fields(document)
+            
+            # Use upsert (insert or update) for compatibility with SQLAlchemy behavior
+            collection.replace_one(
+                {'chat_id': chat_id},
+                document,
+                upsert=True
+            )
+            
+            logger.debug(f"Stored chat history: {chat_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to store chat history: {e}")
+            raise DatabaseError(f"Failed to store chat history: {e}")
+    
+    def get_chat_history(
+        self,
+        namespace: str = "default",
+        session_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Get chat history from MongoDB"""
+        try:
+            collection = self._get_collection(self.CHAT_HISTORY_COLLECTION)
+            
+            # Build filter
+            filter_doc = {'namespace': namespace}
+            if session_id:
+                filter_doc['session_id'] = session_id
+            
+            # Execute query
+            cursor = collection.find(filter_doc).sort('timestamp', -1).limit(limit)
+            
+            results = []
+            for document in cursor:
+                results.append(self._convert_to_dict(document))
+            
+            logger.debug(f"Retrieved {len(results)} chat history entries")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to get chat history: {e}")
+            return []
+    
+    def store_long_term_memory_enhanced(
+        self, memory: ProcessedLongTermMemory, chat_id: str, namespace: str = "default"
+    ) -> str:
+        """Store a ProcessedLongTermMemory in MongoDB with enhanced schema"""
+        memory_id = str(uuid.uuid4())
+        
+        try:
+            collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+            
+            # Convert Pydantic model to MongoDB document
+            document = {
+                'memory_id': memory_id,
+                'original_chat_id': chat_id,
+                'processed_data': memory.model_dump(mode="json"),
+                'importance_score': memory.importance_score,
+                'category_primary': memory.classification.value,
+                'retention_type': "long_term",
+                'namespace': namespace,
+                'created_at': datetime.now(timezone.utc),
+                'searchable_content': memory.content,
+                'summary': memory.summary,
+                'novelty_score': 0.5,
+                'relevance_score': 0.5,
+                'actionability_score': 0.5,
+                'classification': memory.classification.value,
+                'memory_importance': memory.importance.value,
+                'topic': memory.topic,
+                'entities_json': memory.entities,
+                'keywords_json': memory.keywords,
+                'is_user_context': memory.is_user_context,
+                'is_preference': memory.is_preference,
+                'is_skill_knowledge': memory.is_skill_knowledge,
+                'is_current_project': memory.is_current_project,
+                'promotion_eligible': memory.promotion_eligible,
+                'duplicate_of': memory.duplicate_of,
+                'supersedes_json': memory.supersedes,
+                'related_memories_json': memory.related_memories,
+                'confidence_score': memory.confidence_score,
+                'extraction_timestamp': memory.extraction_timestamp,
+                'classification_reason': memory.classification_reason,
+                'processed_for_duplicates': False,
+                'conscious_processed': False,
+                'access_count': 0
+            }
+            
+            # Convert datetime fields
+            document = self._convert_datetime_fields(document)
+            
+            # Insert document
+            collection.insert_one(document)
+            
+            logger.debug(f"Stored enhanced long-term memory {memory_id}")
+            return memory_id
+            
+        except Exception as e:
+            logger.error(f"Failed to store enhanced long-term memory: {e}")
+            raise DatabaseError(f"Failed to store enhanced long-term memory: {e}")
+    
+    def search_memories(
+        self,
+        query: str,
+        namespace: str = "default",
+        category_filter: Optional[List[str]] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Search memories using MongoDB text search and fallback strategies"""
+        try:
+            results = []
+            collections_to_search = [
+                (self.SHORT_TERM_MEMORY_COLLECTION, 'short_term'),
+                (self.LONG_TERM_MEMORY_COLLECTION, 'long_term')
+            ]
+            
+            # If query is empty, return recent memories
+            if not query or not query.strip():
+                return self._get_recent_memories(namespace, category_filter, limit)
+            
+            # Try text search first
+            for collection_name, memory_type in collections_to_search:
+                collection = self._get_collection(collection_name)
+                
+                try:
+                    # Build search filter
+                    search_filter = {
+                        '$text': {'$search': query},
+                        'namespace': namespace
+                    }
+                    
+                    if category_filter:
+                        search_filter['category_primary'] = {'$in': category_filter}
+                    
+                    # For short-term memories, exclude expired ones
+                    if memory_type == 'short_term':
+                        search_filter['$or'] = [
+                            {'expires_at': {'$exists': False}},
+                            {'expires_at': None},
+                            {'expires_at': {'$gt': datetime.now(timezone.utc)}}
+                        ]
+                    
+                    # Execute text search
+                    cursor = collection.find(
+                        search_filter,
+                        {'score': {'$meta': 'textScore'}}
+                    ).sort([
+                        ('score', {'$meta': 'textScore'}),
+                        ('importance_score', -1)
+                    ]).limit(limit)
+                    
+                    for document in cursor:
+                        memory = self._convert_to_dict(document)
+                        memory['memory_type'] = memory_type
+                        memory['search_strategy'] = 'mongodb_text'
+                        results.append(memory)
+                        
+                except Exception as text_error:
+                    logger.debug(f"Text search failed for {collection_name}: {text_error}")
+                    # Fall back to regex search for this collection
+                    results.extend(self._regex_search_collection(
+                        collection, memory_type, query, namespace, category_filter, limit
+                    ))
+            
+            # Sort all results by search score and importance
+            results.sort(
+                key=lambda x: (
+                    x.get('score', 0),
+                    x.get('importance_score', 0)
+                ),
+                reverse=True
+            )
+            
+            logger.debug(f"Memory search returned {len(results)} results for query: {query}")
+            return results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Memory search failed: {e}")
+            return []
+    
+    def _regex_search_collection(
+        self, 
+        collection: Collection, 
+        memory_type: str, 
+        query: str, 
+        namespace: str,
+        category_filter: Optional[List[str]] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Perform regex search on a collection as fallback"""
+        try:
+            # Create case-insensitive regex pattern
+            regex_pattern = {'$regex': query, '$options': 'i'}
+            
+            # Build search filter using regex
+            search_filter = {
+                '$or': [
+                    {'searchable_content': regex_pattern},
+                    {'summary': regex_pattern}
+                ],
+                'namespace': namespace
+            }
+            
+            if category_filter:
+                search_filter['category_primary'] = {'$in': category_filter}
+            
+            # For short-term memories, exclude expired ones
+            if memory_type == 'short_term':
+                current_time = datetime.now(timezone.utc)
+                search_filter['$and'] = [
+                    search_filter,
+                    {
+                        '$or': [
+                            {'expires_at': {'$exists': False}},
+                            {'expires_at': None},
+                            {'expires_at': {'$gt': current_time}}
+                        ]
+                    }
+                ]
+            
+            # Execute regex search
+            cursor = collection.find(search_filter).sort([
+                ('importance_score', -1),
+                ('created_at', -1)
+            ]).limit(limit)
+            
+            results = []
+            for document in cursor:
+                memory = self._convert_to_dict(document)
+                memory['memory_type'] = memory_type
+                memory['search_strategy'] = 'regex_fallback'
+                results.append(memory)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Regex search failed: {e}")
+            return []
+    
+    def _get_recent_memories(
+        self, 
+        namespace: str = "default", 
+        category_filter: Optional[List[str]] = None, 
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get recent memories when no search query provided"""
+        try:
+            results = []
+            collections_to_search = [
+                (self.SHORT_TERM_MEMORY_COLLECTION, 'short_term'),
+                (self.LONG_TERM_MEMORY_COLLECTION, 'long_term')
+            ]
+            
+            for collection_name, memory_type in collections_to_search:
+                collection = self._get_collection(collection_name)
+                
+                # Build filter
+                filter_doc = {'namespace': namespace}
+                
+                if category_filter:
+                    filter_doc['category_primary'] = {'$in': category_filter}
+                
+                # For short-term memories, exclude expired ones
+                if memory_type == 'short_term':
+                    current_time = datetime.now(timezone.utc)
+                    filter_doc['$or'] = [
+                        {'expires_at': {'$exists': False}},
+                        {'expires_at': None},
+                        {'expires_at': {'$gt': current_time}}
+                    ]
+                
+                # Get recent memories
+                cursor = collection.find(filter_doc).sort([
+                    ('importance_score', -1),
+                    ('created_at', -1)
+                ]).limit(limit // 2)  # Split limit between collections
+                
+                for document in cursor:
+                    memory = self._convert_to_dict(document)
+                    memory['memory_type'] = memory_type
+                    memory['search_strategy'] = 'recent_memories'
+                    results.append(memory)
+            
+            # Sort by importance and creation time
+            results.sort(key=lambda x: (x.get('importance_score', 0), x.get('created_at', '')), reverse=True)
+            
+            return results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent memories: {e}")
+            return []
+    
+    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+        """Get comprehensive memory statistics"""
+        try:
+            database = self._get_database()
+            
+            stats = {}
+            
+            # Basic counts
+            stats["chat_history_count"] = self._get_collection(self.CHAT_HISTORY_COLLECTION).count_documents(
+                {'namespace': namespace}
+            )
+            
+            stats["short_term_count"] = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).count_documents(
+                {'namespace': namespace}
+            )
+            
+            stats["long_term_count"] = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).count_documents(
+                {'namespace': namespace}
+            )
+            
+            # Category breakdown for short-term memories
+            short_categories = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).aggregate([
+                {'$match': {'namespace': namespace}},
+                {'$group': {'_id': '$category_primary', 'count': {'$sum': 1}}}
+            ])
+            
+            categories = {}
+            for doc in short_categories:
+                categories[doc['_id']] = doc['count']
+            
+            # Category breakdown for long-term memories
+            long_categories = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).aggregate([
+                {'$match': {'namespace': namespace}},
+                {'$group': {'_id': '$category_primary', 'count': {'$sum': 1}}}
+            ])
+            
+            for doc in long_categories:
+                categories[doc.get('_id', 'unknown')] = categories.get(doc.get('_id', 'unknown'), 0) + doc['count']
+            
+            stats["memories_by_category"] = categories
+            
+            # Average importance scores
+            short_avg_pipeline = [
+                {'$match': {'namespace': namespace}},
+                {'$group': {'_id': None, 'avg_importance': {'$avg': '$importance_score'}}}
+            ]
+            short_avg_result = list(self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).aggregate(short_avg_pipeline))
+            short_avg = short_avg_result[0]['avg_importance'] if short_avg_result else 0
+            
+            long_avg_pipeline = [
+                {'$match': {'namespace': namespace}},
+                {'$group': {'_id': None, 'avg_importance': {'$avg': '$importance_score'}}}
+            ]
+            long_avg_result = list(self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).aggregate(long_avg_pipeline))
+            long_avg = long_avg_result[0]['avg_importance'] if long_avg_result else 0
+            
+            total_memories = stats["short_term_count"] + stats["long_term_count"]
+            if total_memories > 0:
+                # Weight averages by count
+                total_avg = (
+                    (short_avg * stats["short_term_count"]) + 
+                    (long_avg * stats["long_term_count"])
+                ) / total_memories
+                stats["average_importance"] = float(total_avg) if total_avg else 0.0
+            else:
+                stats["average_importance"] = 0.0
+            
+            # Database info
+            stats["database_type"] = self.database_type
+            stats["database_url"] = (
+                self.database_connect.split("@")[-1] if "@" in self.database_connect 
+                else self.database_connect
+            )
+            
+            # MongoDB-specific stats
+            try:
+                db_stats = database.command("dbStats")
+                stats["storage_size"] = db_stats.get('storageSize', 0)
+                stats["data_size"] = db_stats.get('dataSize', 0)
+                stats["index_size"] = db_stats.get('indexSize', 0)
+                stats["collections"] = db_stats.get('collections', 0)
+            except Exception as e:
+                logger.debug(f"Could not get database stats: {e}")
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Failed to get memory stats: {e}")
+            return {"error": str(e)}
+    
+    def clear_memory(
+        self, namespace: str = "default", memory_type: Optional[str] = None
+    ):
+        """Clear memory data"""
+        try:
+            if memory_type == "short_term":
+                self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+            elif memory_type == "long_term":
+                self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+            elif memory_type == "chat_history":
+                self._get_collection(self.CHAT_HISTORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+            else:  # Clear all
+                self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+                self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+                self._get_collection(self.CHAT_HISTORY_COLLECTION).delete_many(
+                    {'namespace': namespace}
+                )
+            
+            logger.info(f"Cleared {memory_type or 'all'} memory for namespace: {namespace}")
+            
+        except Exception as e:
+            logger.error(f"Failed to clear memory: {e}")
+            raise DatabaseError(f"Failed to clear memory: {e}")
+    
+    def _get_connection(self):
+        """
+        Compatibility method for legacy code that expects raw database connections.
+        Returns a MongoDB-compatible connection wrapper.
+        """
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def connection_context():
+            class MongoDBConnection:
+                """Wrapper that provides SQLAlchemy-like interface for MongoDB"""
+                
+                def __init__(self, manager):
+                    self.manager = manager
+                    self.database = manager._get_database()
+                
+                def execute(self, query, parameters=None):
+                    """Execute query with parameter substitution"""
+                    try:
+                        # This is a compatibility shim for raw SQL-like queries
+                        # Convert basic queries to MongoDB operations
+                        if isinstance(query, str):
+                            # Handle common SQL-like patterns and convert to MongoDB
+                            if "SELECT" in query.upper():
+                                return self._handle_select_query(query, parameters)
+                            elif "INSERT" in query.upper():
+                                return self._handle_insert_query(query, parameters)
+                            elif "UPDATE" in query.upper():
+                                return self._handle_update_query(query, parameters)
+                            elif "DELETE" in query.upper():
+                                return self._handle_delete_query(query, parameters)
+                        
+                        # Fallback for direct MongoDB operations
+                        return MockQueryResult([])
+                        
+                    except Exception as e:
+                        logger.warning(f"Query execution failed: {e}")
+                        return MockQueryResult([])
+                
+                def _handle_select_query(self, query, parameters):
+                    """Handle SELECT-like queries"""
+                    # Simple pattern matching for common queries
+                    if "short_term_memory" in query:
+                        collection = self.manager._get_collection(self.manager.SHORT_TERM_MEMORY_COLLECTION)
+                        filter_doc = {}
+                        if parameters:
+                            # Basic parameter substitution
+                            if 'namespace' in parameters:
+                                filter_doc['namespace'] = parameters['namespace']
+                        
+                        cursor = collection.find(filter_doc).sort('created_at', -1).limit(100)
+                        results = [self.manager._convert_to_dict(doc) for doc in cursor]
+                        return MockQueryResult(results)
+                    
+                    return MockQueryResult([])
+                
+                def _handle_insert_query(self, query, parameters):
+                    """Handle INSERT-like queries"""
+                    # This is a compatibility shim - not fully implemented
+                    return MockQueryResult([])
+                
+                def _handle_update_query(self, query, parameters):
+                    """Handle UPDATE-like queries"""
+                    # This is a compatibility shim - not fully implemented
+                    return MockQueryResult([])
+                
+                def _handle_delete_query(self, query, parameters):
+                    """Handle DELETE-like queries"""
+                    # This is a compatibility shim - not fully implemented
+                    return MockQueryResult([])
+                
+                def commit(self):
+                    """Commit transaction (no-op for MongoDB single operations)"""
+                    pass
+                
+                def rollback(self):
+                    """Rollback transaction (no-op for MongoDB single operations)"""
+                    pass
+                
+                def close(self):
+                    """Close connection (no-op, connection pooling handled by client)"""
+                    pass
+                
+                def scalar(self):
+                    """Compatibility method"""
+                    return None
+                
+                def fetchall(self):
+                    """Compatibility method"""
+                    return []
+            
+            yield MongoDBConnection(self)
+        
+        return connection_context()
+    
+    def close(self):
+        """Close MongoDB connection"""
+        if self.client:
+            self.client.close()
+            self.client = None
+            self.database = None
+            self._collections.clear()
+            logger.info("MongoDB connection closed")
+    
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get MongoDB database information and capabilities"""
+        try:
+            client = self._get_client()
+            database = self._get_database()
+            
+            info = {
+                "database_type": self.database_type,
+                "database_name": self.database_name,
+                "connection_string": self.database_connect.replace(
+                    f"{self.username}:{self.password}@", "***:***@"
+                ) if self.username and self.password else self.database_connect
+            }
+            
+            # Server information
+            try:
+                server_info = client.server_info()
+                info["version"] = server_info.get("version", "unknown")
+                info["driver"] = "pymongo"
+            except Exception:
+                info["version"] = "unknown"
+                info["driver"] = "pymongo"
+            
+            # Database stats
+            try:
+                stats = database.command("dbStats")
+                info["collections_count"] = stats.get("collections", 0)
+                info["data_size"] = stats.get("dataSize", 0)
+                info["storage_size"] = stats.get("storageSize", 0)
+                info["indexes_count"] = stats.get("indexes", 0)
+            except Exception:
+                pass
+            
+            # Capabilities
+            info["supports_fulltext"] = True
+            info["auto_creation_enabled"] = True  # MongoDB creates collections automatically
+            
+            return info
+            
+        except Exception as e:
+            logger.warning(f"Could not get MongoDB database info: {e}")
+            return {
+                "database_type": self.database_type,
+                "version": "unknown",
+                "supports_fulltext": True,
+                "error": str(e),
+            }
+
+
+class MockQueryResult:
+    """Mock query result for compatibility with SQLAlchemy-style code"""
+    
+    def __init__(self, results):
+        self.results = results
+        self._index = 0
+    
+    def fetchall(self):
+        """Return all results"""
+        return self.results
+    
+    def fetchone(self):
+        """Return one result"""
+        if self._index < len(self.results):
+            result = self.results[self._index]
+            self._index += 1
+            return result
+        return None
+    
+    def scalar(self):
+        """Return scalar value"""
+        if self.results:
+            first_result = self.results[0]
+            if isinstance(first_result, dict):
+                # Return first value from dict
+                return next(iter(first_result.values()))
+            return first_result
+        return None
+    
+    def __iter__(self):
+        """Make iterable"""
+        return iter(self.results)
