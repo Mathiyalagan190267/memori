@@ -41,6 +41,7 @@ response = client.chat.completions.create(
     model="gpt-4", 
     messages=[{"role": "user", "content": "Help me with authentication"}]
 )
+# Memori automatically knows about your FastAPI Python project!
 ```
 
 ## Key Features
@@ -102,6 +103,12 @@ client.messages.create(...)
 Supports multiple relational databases for production-ready memory storage:
 
 **[Database Configuration Guide](open-source/databases/overview.md)**
+
+### User with serverless databases
+
+Get FREE serverless database instance in GibsonAI platform. You can just prompt to create adn deploy a new database.
+
+**[GibsonAI Integration Guide](open-source/databases/gibsonai.md)**
 
 ## Framework Integrations
 

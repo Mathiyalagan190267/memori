@@ -102,6 +102,8 @@ print("\n💡 Notice: Memori automatically knows about your FastAPI Python proje
 
 ---
 
+> Get **FREE** serverless database instance in [GibsonAI](https://app.gibsonai.com/signup) platform.
+
 **🚀 Ready to explore more?**
 - [📖 Examples](#examples) - Basic usage patterns and code samples
 - [🔌 Framework Integrations](#framework-integrations) - LangChain, Agno & CrewAI examples  
