@@ -203,6 +203,12 @@ response = research_agent.run("Research the latest AI developments")
 
 ## Database Setup for Production
 
+### GibsonAI (Serverless)
+
+Get **FREE** serverless database instance in GibsonAI platform. You can just prompt to create and deploy a new database.
+
+**[GibsonAI Integration Guide](open-source/databases/gibsonai)**
+
 ### PostgreSQL (Recommended)
 
 Best for production applications with multiple users:
