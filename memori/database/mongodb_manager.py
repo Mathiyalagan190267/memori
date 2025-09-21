@@ -29,7 +29,15 @@ from ..utils.pydantic_models import ProcessedLongTermMemory
 
 class MongoDBDatabaseManager:
     """MongoDB-based database manager with interface compatible with SQLAlchemy manager"""
-    
+
+    # Constants for collection names
+    CHAT_HISTORY_COLLECTION = "chat_history"
+    SHORT_TERM_MEMORY_COLLECTION = "short_term_memory"
+    LONG_TERM_MEMORY_COLLECTION = "long_term_memory"
+
+    # Database type identifier for database-agnostic code
+    database_type = "mongodb"
+
     def __init__(
         self, database_connect: str, template: str = "basic", schema_init: bool = True
     ):
@@ -452,15 +460,253 @@ class MongoDBDatabaseManager:
             logger.error(f"Failed to get chat history: {e}")
             return []
     
+    def store_short_term_memory(
+        self,
+        memory_id: str,
+        processed_data: str,
+        importance_score: float,
+        category_primary: str,
+        retention_type: str,
+        namespace: str = "default",
+        expires_at: Optional[datetime] = None,
+        searchable_content: str = "",
+        summary: str = "",
+        is_permanent_context: bool = False,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Store short-term memory in MongoDB"""
+        try:
+            collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+
+            document = {
+                'memory_id': memory_id,
+                'processed_data': processed_data,
+                'importance_score': importance_score,
+                'category_primary': category_primary,
+                'retention_type': retention_type,
+                'namespace': namespace,
+                'created_at': datetime.now(timezone.utc),
+                'expires_at': expires_at,
+                'searchable_content': searchable_content,
+                'summary': summary,
+                'is_permanent_context': is_permanent_context,
+                'metadata_json': metadata or {},
+                'access_count': 0,
+                'last_accessed': datetime.now(timezone.utc)
+            }
+
+            # Convert datetime fields
+            document = self._convert_datetime_fields(document)
+
+            # Use upsert (insert or update) for compatibility with SQLAlchemy behavior
+            collection.replace_one(
+                {'memory_id': memory_id},
+                document,
+                upsert=True
+            )
+
+            logger.debug(f"Stored short-term memory: {memory_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to store short-term memory: {e}")
+            raise DatabaseError(f"Failed to store short-term memory: {e}")
+
+    def get_short_term_memory(
+        self,
+        namespace: str = "default",
+        category_filter: Optional[str] = None,
+        limit: int = 10,
+        include_expired: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Get short-term memory from MongoDB"""
+        try:
+            collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+
+            # Build filter
+            filter_doc = {'namespace': namespace}
+
+            if category_filter:
+                filter_doc['category_primary'] = category_filter
+
+            if not include_expired:
+                current_time = datetime.now(timezone.utc)
+                filter_doc['$or'] = [
+                    {'expires_at': {'$exists': False}},
+                    {'expires_at': None},
+                    {'expires_at': {'$gt': current_time}}
+                ]
+
+            # Execute query
+            cursor = collection.find(filter_doc).sort([
+                ('importance_score', -1),
+                ('created_at', -1)
+            ]).limit(limit)
+
+            results = []
+            for document in cursor:
+                results.append(self._convert_to_dict(document))
+
+            logger.debug(f"Retrieved {len(results)} short-term memory entries")
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to get short-term memory: {e}")
+            return []
+
+    def search_short_term_memory(
+        self,
+        query: str,
+        namespace: str = "default",
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Search short-term memory using MongoDB text search"""
+        try:
+            # Clean the query to remove common prefixes that interfere with search
+            cleaned_query = query.strip()
+
+            # Remove "User query:" prefix if present (this was causing search failures)
+            if cleaned_query.lower().startswith("user query:"):
+                cleaned_query = cleaned_query[11:].strip()
+                logger.debug(f"Cleaned short-term search query from '{query}' to '{cleaned_query}'")
+
+            if not cleaned_query:
+                logger.debug("Empty query provided for short-term search, returning all short-term memories")
+                return self.get_short_term_memory(namespace=namespace, limit=limit)
+
+            collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+
+            current_time = datetime.now(timezone.utc)
+            search_filter = {
+                '$and': [
+                    {'$text': {'$search': cleaned_query}},  # Use cleaned query
+                    {'namespace': namespace},
+                    {
+                        '$or': [
+                            {'expires_at': {'$exists': False}},
+                            {'expires_at': None},
+                            {'expires_at': {'$gt': current_time}}
+                        ]
+                    }
+                ]
+            }
+
+            logger.debug(f"Executing short-term MongoDB text search with cleaned query '{cleaned_query}' and filter: {search_filter}")
+
+            # Execute MongoDB text search with text score projection
+            cursor = collection.find(
+                search_filter,
+                {'score': {'$meta': 'textScore'}}
+            ).sort([
+                ('score', {'$meta': 'textScore'}),
+                ('importance_score', -1),
+                ('created_at', -1)
+            ]).limit(limit)
+
+            results = []
+            for document in cursor:
+                memory = self._convert_to_dict(document)
+                memory['memory_type'] = 'short_term'
+                memory['search_strategy'] = 'mongodb_text'
+                # Preserve text search score
+                if 'score' in document:
+                    memory['text_score'] = document['score']
+                results.append(memory)
+
+            logger.debug(f"Short-term memory search returned {len(results)} results for query: '{query}'")
+            return results
+
+        except Exception as e:
+            logger.error(f"Short-term memory search failed: {e}")
+            return []
+
+    def update_short_term_memory_access(self, memory_id: str, namespace: str = "default"):
+        """Update access count and last accessed time for short-term memory"""
+        try:
+            collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+
+            collection.update_one(
+                {'memory_id': memory_id, 'namespace': namespace},
+                {
+                    '$inc': {'access_count': 1},
+                    '$set': {'last_accessed': datetime.now(timezone.utc)}
+                }
+            )
+
+        except Exception as e:
+            logger.debug(f"Failed to update short-term memory access: {e}")
+
+    def get_conscious_memories(
+        self,
+        namespace: str = "default",
+        processed_only: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Get conscious-info labeled memories from long-term memory"""
+        try:
+            collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+
+            # Build filter for conscious-info classification
+            filter_doc = {
+                'namespace': namespace,
+                'classification': 'conscious-info'
+            }
+
+            if processed_only:
+                filter_doc['conscious_processed'] = True
+            else:
+                # Look for unprocessed memories - handle missing field gracefully
+                filter_doc['$or'] = [
+                    {'conscious_processed': False},
+                    {'conscious_processed': {'$exists': False}},
+                    {'conscious_processed': None}
+                ]
+
+            # Execute query
+            cursor = collection.find(filter_doc).sort([
+                ('importance_score', -1),
+                ('created_at', -1)
+            ])
+
+            results = []
+            for document in cursor:
+                results.append(self._convert_to_dict(document))
+
+            logger.debug(f"Retrieved {len(results)} conscious memories")
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to get conscious memories: {e}")
+            return []
+
+    def mark_conscious_memories_processed(self, memory_ids: List[str], namespace: str = "default"):
+        """Mark conscious memories as processed"""
+        try:
+            collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+
+            # Update all memories in the list
+            result = collection.update_many(
+                {
+                    'memory_id': {'$in': memory_ids},
+                    'namespace': namespace
+                },
+                {
+                    '$set': {'conscious_processed': True}
+                }
+            )
+
+            logger.debug(f"Marked {result.modified_count} memories as conscious processed")
+
+        except Exception as e:
+            logger.error(f"Failed to mark conscious memories processed: {e}")
+
     def store_long_term_memory_enhanced(
         self, memory: ProcessedLongTermMemory, chat_id: str, namespace: str = "default"
     ) -> str:
         """Store a ProcessedLongTermMemory in MongoDB with enhanced schema"""
         memory_id = str(uuid.uuid4())
-        
+
         try:
             collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
-            
+
             # Enrich searchable content with keywords and entities for better search
             enriched_content_parts = [memory.content]
 
@@ -516,16 +762,16 @@ class MongoDBDatabaseManager:
                 'conscious_processed': False,
                 'access_count': 0
             }
-            
+
             # Convert datetime fields
             document = self._convert_datetime_fields(document)
-            
+
             # Insert document
             collection.insert_one(document)
-            
+
             logger.debug(f"Stored enhanced long-term memory {memory_id}")
             return memory_id
-            
+
         except Exception as e:
             logger.error(f"Failed to store enhanced long-term memory: {e}")
             raise DatabaseError(f"Failed to store enhanced long-term memory: {e}")
@@ -541,9 +787,17 @@ class MongoDBDatabaseManager:
         try:
             logger.info(f"Starting MongoDB text search for query: '{query}' in namespace: '{namespace}'")
 
+            # Clean the query to remove common prefixes that interfere with search
+            cleaned_query = query.strip()
+
+            # Remove "User query:" prefix if present (this was causing search failures)
+            if cleaned_query.lower().startswith("user query:"):
+                cleaned_query = cleaned_query[11:].strip()  # Remove "User query:" and any following whitespace
+                logger.debug(f"Cleaned query from '{query}' to '{cleaned_query}'")
+
             # Return empty results for empty queries
-            if not query or not query.strip():
-                logger.debug("Empty query provided, returning empty results")
+            if not cleaned_query:
+                logger.debug("Empty query after cleaning, returning empty results")
                 return []
 
             results = []
@@ -558,9 +812,9 @@ class MongoDBDatabaseManager:
                 logger.debug(f"Searching {memory_type} memories in collection: {collection_name}")
 
                 try:
-                    # Build base search filter with text search
+                    # Build base search filter with text search using cleaned query
                     search_filter = {
-                        '$text': {'$search': query},
+                        '$text': {'$search': cleaned_query},
                         'namespace': namespace
                     }
 
@@ -575,7 +829,7 @@ class MongoDBDatabaseManager:
                         # Combine text search filter with expiration filter
                         search_filter = {
                             '$and': [
-                                {'$text': {'$search': query}},
+                                {'$text': {'$search': cleaned_query}},  # Use cleaned query
                                 {'namespace': namespace},
                                 {
                                     '$or': [
@@ -590,7 +844,7 @@ class MongoDBDatabaseManager:
                             search_filter['$and'].append({'category_primary': {'$in': category_filter}})
                         logger.debug("Applied expiration filter for short-term memories")
 
-                    logger.debug(f"Executing MongoDB text search with filter: {search_filter}")
+                    logger.debug(f"Executing MongoDB text search with cleaned query '{cleaned_query}' and filter: {search_filter}")
 
                     # Execute MongoDB text search with text score projection
                     cursor = collection.find(

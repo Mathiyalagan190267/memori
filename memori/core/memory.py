@@ -989,47 +989,81 @@ class Memori:
         Get conscious context from ALL short-term memory summaries.
         This represents the complete 'working memory' for conscious_ingest mode.
         Used only at program startup when conscious_ingest=True.
+        Database-agnostic version that works with both SQL and MongoDB.
         """
         try:
-            from sqlalchemy import text
+            # Detect database type from the db_manager
+            db_type = getattr(self.db_manager, 'database_type', 'sql')
 
-            with self.db_manager._get_connection() as conn:
-                # Get ALL short-term memories (no limit) ordered by importance and recency
-                # This gives the complete conscious context as single initial injection
-                result = conn.execute(
-                    text(
-                        """
-                    SELECT memory_id, processed_data, importance_score,
-                           category_primary, summary, searchable_content,
-                           created_at, access_count
-                    FROM short_term_memory
-                    WHERE namespace = :namespace AND (expires_at IS NULL OR expires_at > :current_time)
-                    ORDER BY importance_score DESC, created_at DESC
-                    """
-                    ),
-                    {"namespace": self.namespace, "current_time": datetime.now()},
+            if db_type == "mongodb":
+                # Use MongoDB-specific method
+                memories = self.db_manager.get_short_term_memory(
+                    namespace=self.namespace,
+                    limit=1000,  # Large limit to get all memories
+                    include_expired=False
                 )
 
-                memories = []
-                for row in result:
-                    memories.append(
-                        {
-                            "memory_id": row[0],
-                            "processed_data": row[1],
-                            "importance_score": row[2],
-                            "category_primary": row[3],
-                            "summary": row[4],
-                            "searchable_content": row[5],
-                            "created_at": row[6],
-                            "access_count": row[7],
-                            "memory_type": "short_term",
-                        }
-                    )
+                # Convert to consistent format
+                formatted_memories = []
+                for memory in memories:
+                    formatted_memories.append({
+                        "memory_id": memory.get("memory_id"),
+                        "processed_data": memory.get("processed_data"),
+                        "importance_score": memory.get("importance_score", 0),
+                        "category_primary": memory.get("category_primary", ""),
+                        "summary": memory.get("summary", ""),
+                        "searchable_content": memory.get("searchable_content", ""),
+                        "created_at": memory.get("created_at"),
+                        "access_count": memory.get("access_count", 0),
+                        "memory_type": "short_term",
+                    })
 
                 logger.debug(
-                    f"Retrieved {len(memories)} conscious memories from short-term storage"
+                    f"Retrieved {len(formatted_memories)} conscious memories from MongoDB short-term storage"
                 )
-                return memories
+                return formatted_memories
+
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with self.db_manager._get_connection() as conn:
+                    # Get ALL short-term memories (no limit) ordered by importance and recency
+                    # This gives the complete conscious context as single initial injection
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT memory_id, processed_data, importance_score,
+                               category_primary, summary, searchable_content,
+                               created_at, access_count
+                        FROM short_term_memory
+                        WHERE namespace = :namespace AND (expires_at IS NULL OR expires_at > :current_time)
+                        ORDER BY importance_score DESC, created_at DESC
+                        """
+                        ),
+                        {"namespace": self.namespace, "current_time": datetime.now()},
+                    )
+
+                    memories = []
+                    for row in result:
+                        memories.append(
+                            {
+                                "memory_id": row[0],
+                                "processed_data": row[1],
+                                "importance_score": row[2],
+                                "category_primary": row[3],
+                                "summary": row[4],
+                                "searchable_content": row[5],
+                                "created_at": row[6],
+                                "access_count": row[7],
+                                "memory_type": "short_term",
+                            }
+                        )
+
+                    logger.debug(
+                        f"Retrieved {len(memories)} conscious memories from SQL short-term storage"
+                    )
+                    return memories
 
         except Exception as e:
             logger.error(f"Failed to get conscious context: {e}")
@@ -1687,6 +1721,9 @@ class Memori:
         if not self._enabled:
             raise MemoriError("Memori is not enabled. Call enable() first.")
 
+        # Debug logging for conversation recording
+        logger.info(f"Recording conversation - Input: '{user_input[:100]}...' Model: {model}")
+
         # Parse response
         response_text, detected_model = self._parse_llm_response(ai_output)
         response_model = model or detected_model
@@ -1695,26 +1732,37 @@ class Memori:
         chat_id = str(uuid.uuid4())
         timestamp = datetime.now()
 
-        # Store conversation
-        self.db_manager.store_chat_history(
-            chat_id=chat_id,
-            user_input=user_input,
-            ai_output=response_text,
-            model=response_model,
-            timestamp=timestamp,
-            session_id=self._session_id,
-            namespace=self.namespace,
-            metadata=metadata or {},
-        )
-
-        # Always process into long-term memory when memory agent is available
-        if self.memory_agent:
-            self._schedule_memory_processing(
-                chat_id, user_input, response_text, response_model
+        try:
+            # Store conversation
+            self.db_manager.store_chat_history(
+                chat_id=chat_id,
+                user_input=user_input,
+                ai_output=response_text,
+                model=response_model,
+                timestamp=timestamp,
+                session_id=self._session_id,
+                namespace=self.namespace,
+                metadata=metadata or {},
             )
+            logger.debug(f"Successfully stored chat history for conversation: {chat_id}")
 
-        logger.debug(f"Recorded conversation: {chat_id}")
-        return chat_id
+            # Always process into long-term memory when memory agent is available
+            if self.memory_agent:
+                self._schedule_memory_processing(
+                    chat_id, user_input, response_text, response_model
+                )
+                logger.debug(f"Scheduled memory processing for conversation: {chat_id}")
+            else:
+                logger.warning(f"Memory agent not available, skipping memory processing for: {chat_id}")
+
+            logger.info(f"Recorded conversation successfully: {chat_id}")
+            return chat_id
+
+        except Exception as e:
+            logger.error(f"Failed to record conversation {chat_id}: {e}")
+            import traceback
+            logger.error(f"Recording error details: {traceback.format_exc()}")
+            raise
 
     def _schedule_memory_processing(
         self, chat_id: str, user_input: str, ai_output: str, model: str

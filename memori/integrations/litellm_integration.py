@@ -186,6 +186,12 @@ class LiteLLMCallbackManager:
                 if hasattr(choice, "message") and hasattr(choice.message, "content"):
                     ai_output = choice.message.content or ""
 
+            # Debug logging to help diagnose recording issues
+            if user_input:
+                logger.debug(f"LiteLLM callback: Recording conversation '{user_input[:50]}...'" if len(user_input) > 50 else f"LiteLLM callback: Recording conversation '{user_input}'")
+            else:
+                logger.warning(f"LiteLLM callback: No user input found in messages: {[msg.get('role') for msg in messages]}")
+
             # Extract model
             model = kwargs.get("model", "litellm-unknown")
 
@@ -233,11 +239,15 @@ class LiteLLMCallbackManager:
                     metadata=metadata,
                 )
                 logger.debug(
-                    f"LiteLLM callback: Recorded conversation for model {model}"
+                    f"LiteLLM callback: Successfully recorded conversation for model {model}"
                 )
+            else:
+                logger.warning(f"LiteLLM callback: Skipping record - user_input='{bool(user_input)}' ai_output='{bool(ai_output)}'")
 
         except Exception as e:
             logger.error(f"LiteLLM callback failed: {e}")
+            import traceback
+            logger.error(f"LiteLLM callback error details: {traceback.format_exc()}")
 
     def _setup_context_injection(self):
         """Set up context injection by wrapping LiteLLM's completion function."""
