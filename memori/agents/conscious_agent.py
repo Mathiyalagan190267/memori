@@ -8,8 +8,8 @@ Supports both SQL and MongoDB database backends.
 """
 
 import json
-from datetime import datetime, timezone
-from typing import List, Dict, Any
+from datetime import datetime
+from typing import List
 
 from loguru import logger
 
@@ -199,8 +199,21 @@ class ConsciouscAgent:
                     copied_count += 1
 
             # Mark new memories as processed
-            memory_ids = [row[0] for row in new_memories]  # memory_id is first column
-            await self._mark_memories_processed(db_manager, memory_ids, namespace)
+            db_type = self._detect_database_type(db_manager)
+            if db_type == "mongodb":
+                memory_ids = [
+                    mem.get('memory_id') for mem in new_memories
+                    if isinstance(mem, dict) and mem.get('memory_id')
+                ]
+            else:
+                memory_ids = [
+                    row[0] for row in new_memories
+                ]  # memory_id is first column for SQL
+
+            if memory_ids:
+                await self._mark_memories_processed(db_manager, memory_ids, namespace)
+            else:
+                logger.warning("ConsciouscAgent: No valid memory IDs found to mark as processed")
 
             logger.info(
                 f"ConsciouscAgent: Copied {copied_count} new conscious-info memories to short-term memory"
@@ -208,7 +221,9 @@ class ConsciouscAgent:
             return copied_count > 0
 
         except Exception as e:
-            logger.error(f"ConsciouscAgent: Context update failed: {e}")
+            logger.error(f"ConsciouscAgent: Context update failed with exception: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"ConsciouscAgent: Full error traceback: {traceback.format_exc()}")
             return False
 
     async def _get_conscious_memories(self, db_manager, namespace: str) -> List:
