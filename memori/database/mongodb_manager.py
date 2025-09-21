@@ -287,21 +287,28 @@ class MongoDBDatabaseManager:
             
             # Enhanced text search index for short-term memory with weights
             try:
-                st_collection.create_index(
-                    [
-                        ("searchable_content", "text"),
-                        ("summary", "text"),
-                        ("topic", "text")
-                    ],
-                    background=False,
-                    weights={
-                        "searchable_content": 10,  # Highest weight for main content
-                        "summary": 5,              # Medium weight for summary
-                        "topic": 3                 # Lower weight for topic
-                    },
-                    name="text_search_index"
-                )
-                logger.info("Created enhanced text search index for short-term memory with weights")
+                # Check if text index already exists
+                existing_indexes = st_collection.list_indexes()
+                text_index_exists = any(idx.get('name') == 'text_search_index' for idx in existing_indexes)
+
+                if not text_index_exists:
+                    st_collection.create_index(
+                        [
+                            ("searchable_content", "text"),
+                            ("summary", "text"),
+                            ("topic", "text")
+                        ],
+                        background=True,  # Use background=True for non-blocking
+                        weights={
+                            "searchable_content": 10,  # Highest weight for main content
+                            "summary": 5,              # Medium weight for summary
+                            "topic": 3                 # Lower weight for topic
+                        },
+                        name="text_search_index"
+                    )
+                    logger.info("Created enhanced text search index for short-term memory with weights")
+                else:
+                    logger.debug("Text search index already exists for short-term memory")
             except Exception as e:
                 logger.warning(f"Text index creation failed for short-term memory: {e}")
 
@@ -318,23 +325,30 @@ class MongoDBDatabaseManager:
 
             # Enhanced text search index for long-term memory with weights
             try:
-                lt_collection.create_index(
-                    [
-                        ("searchable_content", "text"),
-                        ("summary", "text"),
-                        ("topic", "text"),
-                        ("classification_reason", "text")
-                    ],
-                    background=False,
-                    weights={
-                        "searchable_content": 10,      # Highest weight for main content
-                        "summary": 8,                  # High weight for summary
-                        "topic": 5,                    # Medium weight for topic
-                        "classification_reason": 2    # Lower weight for reasoning
-                    },
-                    name="text_search_index"
-                )
-                logger.info("Created enhanced text search index for long-term memory with weights")
+                # Check if text index already exists
+                existing_indexes = lt_collection.list_indexes()
+                text_index_exists = any(idx.get('name') == 'text_search_index' for idx in existing_indexes)
+
+                if not text_index_exists:
+                    lt_collection.create_index(
+                        [
+                            ("searchable_content", "text"),
+                            ("summary", "text"),
+                            ("topic", "text"),
+                            ("classification_reason", "text")
+                        ],
+                        background=True,  # Use background=True for non-blocking
+                        weights={
+                            "searchable_content": 10,      # Highest weight for main content
+                            "summary": 8,                  # High weight for summary
+                            "topic": 5,                    # Medium weight for topic
+                            "classification_reason": 2    # Lower weight for reasoning
+                        },
+                        name="text_search_index"
+                    )
+                    logger.info("Created enhanced text search index for long-term memory with weights")
+                else:
+                    logger.debug("Text search index already exists for long-term memory")
             except Exception as e:
                 logger.warning(f"Text index creation failed for long-term memory: {e}")
             
@@ -511,6 +525,29 @@ class MongoDBDatabaseManager:
             logger.error(f"Failed to store short-term memory: {e}")
             raise DatabaseError(f"Failed to store short-term memory: {e}")
 
+    def find_short_term_memory_by_id(
+        self,
+        memory_id: str,
+        namespace: str = "default",
+    ) -> Optional[Dict[str, Any]]:
+        """Find a specific short-term memory by memory_id"""
+        try:
+            collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
+
+            # Find memory by memory_id and namespace
+            document = collection.find_one({
+                'memory_id': memory_id,
+                'namespace': namespace
+            })
+
+            if document:
+                return self._convert_to_dict(document)
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to find short-term memory by ID {memory_id}: {e}")
+            return None
+
     def get_short_term_memory(
         self,
         namespace: str = "default",
@@ -651,14 +688,12 @@ class MongoDBDatabaseManager:
             }
 
             if processed_only:
+                # Get only processed memories
                 filter_doc['conscious_processed'] = True
             else:
-                # Look for unprocessed memories - handle missing field gracefully
-                filter_doc['$or'] = [
-                    {'conscious_processed': False},
-                    {'conscious_processed': {'$exists': False}},
-                    {'conscious_processed': None}
-                ]
+                # Get ALL conscious-info memories regardless of processed status
+                # This is the correct behavior for initial conscious ingestion
+                pass  # No additional filter needed
 
             # Execute query
             cursor = collection.find(filter_doc).sort([
@@ -675,6 +710,42 @@ class MongoDBDatabaseManager:
 
         except Exception as e:
             logger.error(f"Failed to get conscious memories: {e}")
+            return []
+
+    def get_unprocessed_conscious_memories(
+        self,
+        namespace: str = "default",
+    ) -> List[Dict[str, Any]]:
+        """Get unprocessed conscious-info labeled memories from long-term memory"""
+        try:
+            collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
+
+            # Build filter for unprocessed conscious-info memories
+            filter_doc = {
+                'namespace': namespace,
+                'classification': 'conscious-info',
+                '$or': [
+                    {'conscious_processed': False},
+                    {'conscious_processed': {'$exists': False}},
+                    {'conscious_processed': None}
+                ]
+            }
+
+            # Execute query
+            cursor = collection.find(filter_doc).sort([
+                ('importance_score', -1),
+                ('created_at', -1)
+            ])
+
+            results = []
+            for document in cursor:
+                results.append(self._convert_to_dict(document))
+
+            logger.debug(f"Retrieved {len(results)} unprocessed conscious memories")
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to get unprocessed conscious memories: {e}")
             return []
 
     def mark_conscious_memories_processed(self, memory_ids: List[str], namespace: str = "default"):
@@ -759,7 +830,7 @@ class MongoDBDatabaseManager:
                 'extraction_timestamp': memory.extraction_timestamp,
                 'classification_reason': memory.classification_reason,
                 'processed_for_duplicates': False,
-                'conscious_processed': False,
+                'conscious_processed': False,  # Ensure new memories start as unprocessed
                 'access_count': 0
             }
 
