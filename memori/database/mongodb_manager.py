@@ -367,7 +367,7 @@ class MongoDBDatabaseManager:
             st_collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
             try:
                 # Perform a simple text search to verify index works
-                test_result = st_collection.find_one({"$text": {"$search": "test"}})
+                _ = st_collection.find_one({"$text": {"$search": "test"}})
                 logger.debug("Short-term memory text index verification successful")
             except Exception as e:
                 logger.warning(f"Short-term memory text index may not be functional: {e}")
@@ -376,7 +376,7 @@ class MongoDBDatabaseManager:
             lt_collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
             try:
                 # Perform a simple text search to verify index works
-                test_result = lt_collection.find_one({"$text": {"$search": "test"}})
+                _ = lt_collection.find_one({"$text": {"$search": "test"}})
                 logger.debug("Long-term memory text index verification successful")
             except Exception as e:
                 logger.warning(f"Long-term memory text index may not be functional: {e}")
@@ -963,11 +963,7 @@ class MongoDBDatabaseManager:
             if results:
                 logger.debug(f"Best match: score={results[0].get('text_score', 'N/A')}, content='{results[0].get('searchable_content', '')[:100]}...'")
             else:
-                logger.warning(f"MongoDB text search found no results for query: '{query}' in namespace: '{namespace}'")
-                logger.warning("This may indicate:")
-                logger.warning("1. No content matches the search terms")
-                logger.warning("2. Text indexes are not properly created")
-                logger.warning("3. searchable_content fields are not populated")
+                logger.debug(f"MongoDB text search found no results for query: '{query}' in namespace: '{namespace}'")
 
             return results[:limit]
 
@@ -1157,17 +1153,17 @@ class MongoDBDatabaseManager:
                     
                     return MockQueryResult([])
                 
-                def _handle_insert_query(self, query, parameters):
+                def _handle_insert_query(self, _query, _parameters):
                     """Handle INSERT-like queries"""
                     # This is a compatibility shim - not fully implemented
                     return MockQueryResult([])
                 
-                def _handle_update_query(self, query, parameters):
+                def _handle_update_query(self, _query, _parameters):
                     """Handle UPDATE-like queries"""
                     # This is a compatibility shim - not fully implemented
                     return MockQueryResult([])
                 
-                def _handle_delete_query(self, query, parameters):
+                def _handle_delete_query(self, _query, _parameters):
                     """Handle DELETE-like queries"""
                     # This is a compatibility shim - not fully implemented
                     return MockQueryResult([])

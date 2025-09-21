@@ -1627,12 +1627,14 @@ class Memori:
     # in memori.integrations.litellm_integration
 
     def _process_memory_sync(
-        self, chat_id: str, user_input: str, ai_output: str, model: str = "unknown"
+        self, chat_id: str, user_input: str, ai_output: str, model: str = "unknown", retry_count: int = 0
     ):
-        """Synchronous memory processing fallback"""
+        """Synchronous memory processing fallback with retry logic"""
         if not self.memory_agent:
             logger.warning("Memory agent not available, skipping memory ingestion")
             return
+
+        max_retries = 2  # Maximum retry attempts
 
         try:
             # Run async processing in new event loop
@@ -1642,25 +1644,53 @@ class Memori:
                 new_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:
+                    logger.debug(f"Starting memory processing for {chat_id} (attempt {retry_count + 1})")
+                    # Add timeout to prevent hanging
                     new_loop.run_until_complete(
-                        self._process_memory_async(
-                            chat_id, user_input, ai_output, model
+                        asyncio.wait_for(
+                            self._process_memory_async(
+                                chat_id, user_input, ai_output, model
+                            ),
+                            timeout=60.0  # 60 second timeout
                         )
                     )
+                    logger.debug(f"Memory processing completed successfully for {chat_id}")
+                except asyncio.TimeoutError as e:
+                    logger.error(f"Memory processing timed out for {chat_id} (attempt {retry_count + 1}): {e}")
+                    if retry_count < max_retries:
+                        logger.info(f"Retrying memory processing for {chat_id} ({retry_count + 1}/{max_retries})")
+                        # Schedule retry
+                        import time
+                        time.sleep(2)  # Wait 2 seconds before retry
+                        self._process_memory_sync(chat_id, user_input, ai_output, model, retry_count + 1)
                 except Exception as e:
-                    logger.error(f"Synchronous memory processing failed: {e}")
+                    logger.error(f"Synchronous memory processing failed for {chat_id} (attempt {retry_count + 1}): {e}")
+                    import traceback
+                    logger.error(f"Full error traceback: {traceback.format_exc()}")
+                    if retry_count < max_retries:
+                        logger.info(f"Retrying memory processing for {chat_id} ({retry_count + 1}/{max_retries})")
+                        # Schedule retry
+                        import time
+                        time.sleep(2)  # Wait 2 seconds before retry
+                        self._process_memory_sync(chat_id, user_input, ai_output, model, retry_count + 1)
                 finally:
                     new_loop.close()
+                    logger.debug(f"Event loop closed for {chat_id}")
 
             # Run in background thread to avoid blocking
             thread = threading.Thread(target=run_memory_processing, daemon=True)
             thread.start()
             logger.debug(
-                f"Memory processing started in background thread for {chat_id}"
+                f"Memory processing started in background thread for {chat_id} (attempt {retry_count + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to start synchronous memory processing: {e}")
+            logger.error(f"Failed to start synchronous memory processing for {chat_id}: {e}")
+            if retry_count < max_retries:
+                logger.info(f"Retrying memory processing startup for {chat_id} ({retry_count + 1}/{max_retries})")
+                import time
+                time.sleep(2)
+                self._process_memory_sync(chat_id, user_input, ai_output, model, retry_count + 1)
 
     def _parse_llm_response(self, response) -> tuple[str, str]:
         """Extract text and model from various LLM response formats."""
