@@ -102,6 +102,8 @@ print("\n💡 Notice: Memori automatically knows about your FastAPI Python proje
 
 ---
 
+> By default, Memori uses in-memory SQLite database. Get **FREE** serverless database instance in [GibsonAI](https://app.gibsonai.com/signup) platform.
+
 **🚀 Ready to explore more?**
 - [📖 Examples](#examples) - Basic usage patterns and code samples
 - [🔌 Framework Integrations](#framework-integrations) - LangChain, Agno & CrewAI examples  
@@ -363,19 +365,25 @@ memori/
 - **[Memory Retrieval](./memory_retrival_example.py)** - Function calling with memory tools
 - **[Advanced Config](./examples/advanced_config.py)** - Production configuration
 - **[Interactive Demo](./memori_example.py)** - Live conscious ingestion showcase
+- **[Simple Multi-User](./examples/multiple-users/simple_multiuser.py)** - Basic demonstration of user memory isolation with namespaces
+- **[FastAPI Multi-User App](./examples/multiple-users/fastapi_multiuser_app.py)** - Full-featured REST API with Swagger UI for testing multi-user functionality
 
 ## Framework Integrations
 
 Memori works seamlessly with popular AI frameworks:
 
-| Framework | Description | Example | Features |
-|-----------|-------------|---------|----------|
-| 🤖 [Agno](./examples/integrations/agno_example.py) | Memory-enhanced agent framework integration with persistent conversations | Simple chat agent with memory search | Memory tools, conversation persistence, contextual responses |
-| 👥 [CrewAI](./examples/integrations/crewai_example.py) | Multi-agent system with shared memory across agent interactions | Collaborative agents with memory | Agent coordination, shared memory, task-based workflows |
-| 🌊 [Digital Ocean AI](./examples/integrations/digital_ocean_example.py) | Memory-enhanced customer support using Digital Ocean's AI platform | Customer support assistant with conversation history | Context injection, session continuity, support analytics |
-| 🔗 [LangChain](./examples/integrations/langchain_example.py) | Enterprise-grade agent framework with advanced memory integration | AI assistant with LangChain tools and memory | Custom tools, agent executors, memory persistence, error handling |
-| � [OpenAI Agent](./examples/integrations/openai_agent_example.py) | Memory-enhanced OpenAI Agent with function calling and user preference tracking | Interactive assistant with memory search and user info storage | Function calling tools, memory search, preference tracking, async conversations |
-| �🚀 [Swarms](./examples/integrations/swarms_example.py) | Multi-agent system framework with persistent memory capabilities | Memory-enhanced Swarms agents with auto/conscious ingestion | Agent memory persistence, multi-agent coordination, contextual awareness |
+| Framework | Description | Example |
+|-----------|-------------|---------|
+| [AgentOps](./examples/integrations/agentops_example.py) | Track and monitor Memori memory operations with comprehensive observability | Memory operation tracking with AgentOps analytics |
+| [Agno](./examples/integrations/agno_example.py) | Memory-enhanced agent framework integration with persistent conversations | Simple chat agent with memory search |
+| [AWS Strands](./examples/integrations/aws_strands_example.py) | Professional development coach with Strands SDK and persistent memory | Career coaching agent with goal tracking |
+| [Azure AI Foundry](./examples/integrations/azure_ai_foundry_example.py) | Azure AI Foundry agents with persistent memory across conversations | Enterprise AI agents with Azure integration |
+| [CamelAI](./examples/integrations/camelai_example.py) | Multi-agent communication framework with automatic memory recording and retrieval | Memory-enhanced chat agents with conversation continuity |
+| [CrewAI](./examples/integrations/crewai_example.py) | Multi-agent system with shared memory across agent interactions | Collaborative agents with memory |
+| [Digital Ocean AI](./examples/integrations/digital_ocean_example.py) | Memory-enhanced customer support using Digital Ocean's AI platform | Customer support assistant with conversation history |
+| [LangChain](./examples/integrations/langchain_example.py) | Enterprise-grade agent framework with advanced memory integration | AI assistant with LangChain tools and memory |
+| [OpenAI Agent](./examples/integrations/openai_agent_example.py) | Memory-enhanced OpenAI Agent with function calling and user preference tracking | Interactive assistant with memory search and user info storage |
+| [Swarms](./examples/integrations/swarms_example.py) | Multi-agent system framework with persistent memory capabilities | Memory-enhanced Swarms agents with auto/conscious ingestion |
 
 ## Interactive Demos
 

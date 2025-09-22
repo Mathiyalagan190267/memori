@@ -414,32 +414,96 @@ Be strategic and comprehensive in your search planning."""
 
         # This would need to be implemented in the database manager
         # For now, get all memories and filter by category
+        logger.debug(
+            f"Searching memories by categories: {categories} in namespace: {namespace}"
+        )
         all_results = db_manager.search_memories(
             query="", namespace=namespace, limit=limit * 3
         )
 
+        logger.debug(
+            f"Retrieved {len(all_results)} total results for category filtering"
+        )
+
         filtered_results = []
-        for result in all_results:
+        for i, result in enumerate(all_results):
+            logger.debug(f"Processing result {i+1}/{len(all_results)}: {type(result)}")
+
             # Extract category from processed_data if it's stored as JSON
             try:
-                if "processed_data" in result:
+                memory_category = None
+
+                # Check processed_data field first
+                if "processed_data" in result and result["processed_data"]:
                     processed_data = result["processed_data"]
+                    logger.debug(
+                        f"Found processed_data: {type(processed_data)} - {str(processed_data)[:100]}..."
+                    )
+
                     # Handle both dict and JSON string formats
                     if isinstance(processed_data, str):
-                        processed_data = json.loads(processed_data)
-                    elif not isinstance(processed_data, dict):
-                        continue  # Skip if neither dict nor string
+                        try:
+                            processed_data = json.loads(processed_data)
+                        except json.JSONDecodeError as je:
+                            logger.debug(f"JSON decode error for processed_data: {je}")
+                            continue
 
-                    memory_category = processed_data.get("category", {}).get(
-                        "primary_category", ""
+                    if isinstance(processed_data, dict):
+                        # Try multiple possible category locations
+                        category_paths = [
+                            ["category", "primary_category"],
+                            ["category"],
+                            ["primary_category"],
+                            ["metadata", "category"],
+                            ["classification", "category"],
+                        ]
+
+                        for path in category_paths:
+                            temp_data = processed_data
+                            try:
+                                for key in path:
+                                    temp_data = temp_data.get(key, {})
+                                if isinstance(temp_data, str) and temp_data:
+                                    memory_category = temp_data
+                                    logger.debug(
+                                        f"Found category via path {path}: {memory_category}"
+                                    )
+                                    break
+                            except (AttributeError, TypeError):
+                                continue
+                    else:
+                        logger.debug(
+                            f"processed_data is not a dict after parsing: {type(processed_data)}"
+                        )
+                        continue
+
+                # Fallback: check direct category field
+                if not memory_category and "category" in result and result["category"]:
+                    memory_category = result["category"]
+                    logger.debug(f"Found category via direct field: {memory_category}")
+
+                # Check if the found category matches any of our target categories
+                if memory_category:
+                    logger.debug(
+                        f"Comparing memory category '{memory_category}' against target categories {categories}"
                     )
                     if memory_category in categories:
                         filtered_results.append(result)
-                elif result.get("category") in categories:
-                    filtered_results.append(result)
-            except (json.JSONDecodeError, KeyError, AttributeError):
+                        logger.debug(f"✓ Category match found: {memory_category}")
+                    else:
+                        logger.debug(
+                            f"✗ Category mismatch: {memory_category} not in {categories}"
+                        )
+                else:
+                    logger.debug("No category found in result")
+
+            except Exception as e:
+                logger.debug(f"Error processing result {i+1}: {e}")
                 continue
 
+        logger.debug(
+            f"Category filtering complete: {len(filtered_results)} results match categories {categories}"
+        )
         return filtered_results[:limit]
 
     def _detect_structured_output_support(self) -> bool:
@@ -824,8 +888,11 @@ Be strategic and comprehensive in your search planning."""
         """
         # This is a compatibility method that uses the database manager directly
         # We'll need the database manager to be injected or passed
-        # For now, return empty list and log the issue
-        logger.warning(f"search_memories called without database manager: {query}")
+        # For now, return empty list and log the issue with parameters
+        logger.warning(
+            f"search_memories called without database manager: query='{query}', "
+            f"max_results={max_results}, namespace='{namespace}'"
+        )
         return []
 
 

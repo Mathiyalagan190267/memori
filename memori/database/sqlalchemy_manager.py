@@ -425,10 +425,31 @@ class SQLAlchemyDatabaseManager:
             logger.warning(f"PostgreSQL FTS setup failed: {e}")
 
     def _get_search_service(self) -> SearchService:
-        """Get search service instance with fresh session"""
-        # Always create a new session to avoid stale connections
-        session = self.SessionLocal()
-        return SearchService(session, self.database_type)
+        """Get search service instance with fresh session and proper error handling"""
+        try:
+            if not self.SessionLocal:
+                logger.error("SessionLocal not available for search service")
+                return None
+
+            # Always create a new session to avoid stale connections
+            session = self.SessionLocal()
+            if not session:
+                logger.error("Failed to create database session")
+                return None
+
+            search_service = SearchService(session, self.database_type)
+            logger.debug(
+                f"Created new search service instance for database type: {self.database_type}"
+            )
+            return search_service
+
+        except Exception as e:
+            logger.error(f"Failed to create search service: {e}")
+            logger.debug(
+                f"Search service creation error: {type(e).__name__}: {str(e)}",
+                exc_info=True,
+            )
+            return None
 
     def store_chat_history(
         self,
@@ -564,22 +585,50 @@ class SQLAlchemyDatabaseManager:
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         """Search memories using the cross-database search service"""
+        search_service = None
         try:
+            logger.debug(
+                f"Starting memory search for query '{query}' in namespace '{namespace}' with category_filter={category_filter}"
+            )
             search_service = self._get_search_service()
-            try:
-                results = search_service.search_memories(
-                    query, namespace, category_filter, limit
+
+            if not search_service:
+                logger.error("Failed to create search service instance")
+                return []
+
+            results = search_service.search_memories(
+                query, namespace, category_filter, limit
+            )
+            logger.debug(f"Search for '{query}' returned {len(results)} results")
+
+            # Validate results structure
+            if not isinstance(results, list):
+                logger.warning(
+                    f"Search service returned unexpected type: {type(results)}, converting to list"
                 )
-                logger.debug(f"Search for '{query}' returned {len(results)} results")
-                return results
-            finally:
-                # Ensure session is properly closed
-                search_service.session.close()
+                results = list(results) if results else []
+
+            return results
 
         except Exception as e:
-            logger.error(f"Memory search failed for query '{query}': {e}")
+            logger.error(
+                f"Memory search failed for query '{query}' in namespace '{namespace}': {e}"
+            )
+            logger.debug(
+                f"Search error details: {type(e).__name__}: {str(e)}", exc_info=True
+            )
             # Return empty list instead of raising exception to avoid breaking auto_ingest
             return []
+
+        finally:
+            # Ensure session is properly closed, even if an exception occurred
+            if search_service and hasattr(search_service, "session"):
+                try:
+                    if search_service.session:
+                        logger.debug("Closing search service session")
+                        search_service.session.close()
+                except Exception as session_e:
+                    logger.warning(f"Error closing search service session: {session_e}")
 
     def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
         """Get comprehensive memory statistics"""
