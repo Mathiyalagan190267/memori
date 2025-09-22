@@ -70,7 +70,7 @@ class QueryParameterTranslator:
             return None
 
         # Handle lists/arrays
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [self._translate_value(item) for item in value]
 
         # Handle dictionaries

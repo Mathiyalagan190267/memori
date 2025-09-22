@@ -12,12 +12,16 @@ from urllib.parse import urlparse
 from loguru import logger
 
 try:
-    import pymongo
-    from bson import ObjectId
+    import pymongo  # noqa: F401
+    from bson import ObjectId  # noqa: F401
     from pymongo import MongoClient
     from pymongo.collection import Collection
     from pymongo.database import Database
-    from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
+    from pymongo.errors import (  # noqa: F401
+        ConnectionFailure,
+        DuplicateKeyError,
+        OperationFailure,
+    )
 
     PYMONGO_AVAILABLE = True
 except ImportError:

@@ -22,7 +22,6 @@ Requirements:
 import json
 import os
 from datetime import date, datetime
-from typing import List, Optional
 
 import litellm
 from dotenv import load_dotenv
@@ -246,9 +245,9 @@ class PersonalDiaryAssistant:
     def process_diary_entry(
         self,
         entry: str,
-        mood: Optional[str] = None,
-        productivity: Optional[int] = None,
-        tags: Optional[List[str]] = None,
+        mood: str | None = None,
+        productivity: int | None = None,
+        tags: list[str] | None = None,
     ) -> str:
         """Process a diary entry with mood and productivity tracking."""
         try:

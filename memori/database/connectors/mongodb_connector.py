@@ -10,11 +10,11 @@ from urllib.parse import urlparse
 from loguru import logger
 
 try:
-    import pymongo
+    import pymongo  # noqa: F401
     from pymongo import MongoClient
     from pymongo.collection import Collection
     from pymongo.database import Database
-    from pymongo.errors import ConnectionFailure, OperationFailure
+    from pymongo.errors import ConnectionFailure, OperationFailure  # noqa: F401
 
     PYMONGO_AVAILABLE = True
 except ImportError:
@@ -362,7 +362,7 @@ class MongoDBConnector(BaseDatabaseConnector):
 
             # Atlas typically includes specific modules or version patterns
             # This is a heuristic check - in production you might want to configure this explicitly
-            server_version = build_info.get("version", "")
+            build_info.get("version", "")
             modules = build_info.get("modules", [])
 
             # Check if vector search is available (Atlas feature)
@@ -416,19 +416,9 @@ class MongoDBConnector(BaseDatabaseConnector):
                     "Vector search is not supported in this MongoDB deployment"
                 )
 
-            collection = self.get_collection(collection_name)
+            self.get_collection(collection_name)
 
             # Vector search index specification for MongoDB Atlas
-            vector_index_spec = {
-                "fields": [
-                    {
-                        "path": vector_field,
-                        "type": "vector",
-                        "similarity": similarity,
-                        "dimensions": dimensions,
-                    }
-                ]
-            }
 
             index_name = index_name or f"{vector_field}_vector_index"
 

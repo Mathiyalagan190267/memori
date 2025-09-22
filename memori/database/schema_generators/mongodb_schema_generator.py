@@ -29,7 +29,7 @@ Expected Document Structure:
     "_id": ObjectId,
     "chat_id": "string (unique)",
     "user_input": "string",
-    "ai_output": "string", 
+    "ai_output": "string",
     "model": "string",
     "timestamp": ISODate,
     "session_id": "string",
@@ -79,35 +79,35 @@ Expected Document Structure:
     "novelty_score": "number (0.0-1.0, default: 0.5)",
     "relevance_score": "number (0.0-1.0, default: 0.5)",
     "actionability_score": "number (0.0-1.0, default: 0.5)",
-    
+
     // Enhanced Classification Fields
     "classification": "string (default: 'conversational')",
     "memory_importance": "string (default: 'medium')",
     "topic": "string (optional)",
     "entities_json": "array (default: [])",
     "keywords_json": "array (default: [])",
-    
+
     // Conscious Context Flags
     "is_user_context": "boolean (default: false)",
     "is_preference": "boolean (default: false)",
     "is_skill_knowledge": "boolean (default: false)",
     "is_current_project": "boolean (default: false)",
     "promotion_eligible": "boolean (default: false)",
-    
+
     // Memory Management
     "duplicate_of": "string (optional)",
     "supersedes_json": "array (default: [])",
     "related_memories_json": "array (default: [])",
-    
+
     // Technical Metadata
     "confidence_score": "number (0.0-1.0, default: 0.8)",
     "extraction_timestamp": ISODate,
     "classification_reason": "string (optional)",
-    
+
     // Processing Status
     "processed_for_duplicates": "boolean (default: false)",
     "conscious_processed": "boolean (default: false)",
-    
+
     // Vector Search Support (MongoDB Atlas)
     "embedding_vector": "array<number> (optional, for vector search)"
 }

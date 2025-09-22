@@ -40,15 +40,14 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from azure.ai.agents.models import FunctionTool
 from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
-from memori.core.providers import ProviderConfig
 from memori import Memori, create_memory_tool
+from memori.core.providers import ProviderConfig
 
 # Constants
 DATABASE_PATH = "sqlite:///smart_shopping_memory.db"
@@ -252,8 +251,8 @@ class SmartShoppingAssistant:
     def search_products(
         self,
         category: str,
-        max_price: Optional[float] = None,
-        min_rating: Optional[float] = None,
+        max_price: float | None = None,
+        min_rating: float | None = None,
     ) -> str:
         """Search products by category with optional filters"""
         try:
@@ -373,7 +372,7 @@ class SmartShoppingAssistant:
         except Exception as e:
             return json.dumps({"error": f"Product details error: {str(e)}"})
 
-    def _handle_function_calls(self, tool_calls) -> List[Dict]:
+    def _handle_function_calls(self, tool_calls) -> list[dict]:
         """Handle function calls from the agent"""
         tool_outputs = []
 

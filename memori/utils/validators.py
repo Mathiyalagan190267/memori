@@ -80,7 +80,7 @@ class DataValidator:
         cls, value: float, field_name: str = "importance score"
     ) -> float:
         """Validate importance score (0.0 to 1.0)"""
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             raise ValidationError(f"{field_name} must be a number")
 
         if not 0.0 <= value <= 1.0:

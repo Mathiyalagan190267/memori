@@ -1726,7 +1726,7 @@ class Memori:
                 try:
                     # Check if we're already in an async context
                     try:
-                        current_loop = asyncio.get_running_loop()
+                        asyncio.get_running_loop()
                         logger.debug(
                             "Found existing event loop, creating new one for memory processing"
                         )

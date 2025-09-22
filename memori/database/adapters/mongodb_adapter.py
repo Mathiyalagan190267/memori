@@ -11,10 +11,10 @@ from uuid import uuid4
 from loguru import logger
 
 try:
-    import pymongo
-    from bson import ObjectId
-    from pymongo.collection import Collection
-    from pymongo.errors import DuplicateKeyError, OperationFailure
+    import pymongo  # noqa: F401
+    from bson import ObjectId  # noqa: F401
+    from pymongo.collection import Collection  # noqa: F401
+    from pymongo.errors import DuplicateKeyError, OperationFailure  # noqa: F401
 
     PYMONGO_AVAILABLE = True
 except ImportError:
@@ -215,7 +215,7 @@ class MongoDBAdapter:
                 "metadata": metadata or {},
             }
 
-            result = collection.insert_one(document)
+            collection.insert_one(document)
             logger.debug(f"Stored chat interaction: {chat_id}")
             return chat_id
 
@@ -307,7 +307,7 @@ class MongoDBAdapter:
 
             document = self._convert_memory_to_document(memory_data)
 
-            result = collection.insert_one(document)
+            collection.insert_one(document)
             logger.debug(f"Stored short-term memory: {memory_data['memory_id']}")
             return memory_data["memory_id"]
 
@@ -413,7 +413,7 @@ class MongoDBAdapter:
 
             document = self._convert_memory_to_document(memory_data)
 
-            result = collection.insert_one(document)
+            collection.insert_one(document)
             logger.debug(f"Stored long-term memory: {memory_data['memory_id']}")
             return memory_data["memory_id"]
 

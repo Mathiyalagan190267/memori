@@ -8,8 +8,8 @@ from typing import Any
 from loguru import logger
 
 try:
-    import pymongo
-    from pymongo.collection import Collection
+    import pymongo  # noqa: F401
+    from pymongo.collection import Collection  # noqa: F401
     from pymongo.errors import OperationFailure
 
     PYMONGO_AVAILABLE = True
