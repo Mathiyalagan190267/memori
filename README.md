@@ -44,7 +44,7 @@ With a single line of code `memori.enable()` any LLM gains the ability to rememb
 - **Radical Simplicity**: One line to enable memory for any LLM framework (OpenAI, Anthropic, LiteLLM, LangChain)
 - **True Data Ownership**: Memory stored in standard SQL databases that users fully control
 - **Complete Transparency**: Every memory decision is queryable with SQL and fully explainable
-- *Zero Vendor Lock-in**: Export your entire memory as a SQLite file and move anywhere
+- **Zero Vendor Lock-in**: Export your entire memory as a SQLite file and move anywhere
 - **Cost Efficiency**: 80-90% cheaper than vector database solutions at scale
 - **Compliance Ready**: SQL-based storage enables audit trails, data residency, and regulatory compliance
 
