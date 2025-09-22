@@ -8,6 +8,7 @@ from .sqlite_connector import SQLiteConnector
 
 try:
     from .mongodb_connector import MongoDBConnector
+
     MONGODB_AVAILABLE = True
 except ImportError:
     MongoDBConnector = None

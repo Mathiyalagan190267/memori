@@ -293,12 +293,20 @@ class OpenAIInterceptor:
                         is_internal = cls._is_internal_agent_call(json_data)
 
                         # Debug logging to help diagnose recording issues
-                        user_messages = [msg for msg in json_data.get("messages", []) if msg.get("role") == "user"]
+                        user_messages = [
+                            msg
+                            for msg in json_data.get("messages", [])
+                            if msg.get("role") == "user"
+                        ]
                         if user_messages and not is_internal:
                             user_content = user_messages[-1].get("content", "")[:50]
-                            logger.debug(f"Recording conversation: '{user_content}...' (internal_check={is_internal})")
+                            logger.debug(
+                                f"Recording conversation: '{user_content}...' (internal_check={is_internal})"
+                            )
                         elif is_internal:
-                            logger.debug(f"Skipping internal agent call (detected pattern match)")
+                            logger.debug(
+                                "Skipping internal agent call (detected pattern match)"
+                            )
 
                         # Skip internal agent processing calls
                         if is_internal:

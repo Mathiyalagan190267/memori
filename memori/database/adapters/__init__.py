@@ -9,6 +9,7 @@ from .sqlite_adapter import SQLiteSearchAdapter
 
 try:
     from .mongodb_adapter import MongoDBAdapter
+
     MONGODB_ADAPTER_AVAILABLE = True
 except ImportError:
     MongoDBAdapter = None

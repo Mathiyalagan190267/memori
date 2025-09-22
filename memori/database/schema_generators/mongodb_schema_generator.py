@@ -3,7 +3,8 @@ MongoDB schema generator for Memori
 Defines collections, validation rules, and indexes for MongoDB
 """
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 from ..connectors.base_connector import BaseSchemaGenerator, DatabaseType
 
 
@@ -175,12 +176,12 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
         """Get MongoDB data type mappings"""
         return {
             "string": "string",
-            "number": "number", 
+            "number": "number",
             "boolean": "boolean",
             "date": "date",
             "object": "object",
             "array": "array",
-            "objectId": "objectId"
+            "objectId": "objectId",
         }
 
     def generate_collections_schema(self) -> Dict[str, Dict[str, Any]]:
@@ -190,283 +191,303 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
                 "validator": {
                     "$jsonSchema": {
                         "bsonType": "object",
-                        "required": ["chat_id", "user_input", "ai_output", "model", "timestamp", "session_id", "namespace"],
+                        "required": [
+                            "chat_id",
+                            "user_input",
+                            "ai_output",
+                            "model",
+                            "timestamp",
+                            "session_id",
+                            "namespace",
+                        ],
                         "properties": {
                             "chat_id": {
                                 "bsonType": "string",
-                                "description": "Unique chat interaction identifier"
+                                "description": "Unique chat interaction identifier",
                             },
                             "user_input": {
                                 "bsonType": "string",
-                                "description": "User's input message"
+                                "description": "User's input message",
                             },
                             "ai_output": {
-                                "bsonType": "string", 
-                                "description": "AI's response message"
+                                "bsonType": "string",
+                                "description": "AI's response message",
                             },
                             "model": {
                                 "bsonType": "string",
-                                "description": "AI model used for response"
+                                "description": "AI model used for response",
                             },
                             "timestamp": {
                                 "bsonType": "date",
-                                "description": "Interaction timestamp"
+                                "description": "Interaction timestamp",
                             },
                             "session_id": {
                                 "bsonType": "string",
-                                "description": "Session identifier"
+                                "description": "Session identifier",
                             },
                             "namespace": {
                                 "bsonType": "string",
-                                "description": "Memory namespace"
+                                "description": "Memory namespace",
                             },
                             "tokens_used": {
                                 "bsonType": "int",
                                 "minimum": 0,
-                                "description": "Number of tokens used"
+                                "description": "Number of tokens used",
                             },
                             "metadata": {
                                 "bsonType": "object",
-                                "description": "Additional metadata"
-                            }
-                        }
+                                "description": "Additional metadata",
+                            },
+                        },
                     }
                 },
                 "validationAction": "warn",  # Use "error" for strict validation
-                "validationLevel": "moderate"
+                "validationLevel": "moderate",
             },
-            
             "short_term_memory": {
                 "validator": {
                     "$jsonSchema": {
                         "bsonType": "object",
-                        "required": ["memory_id", "processed_data", "importance_score", "category_primary", "namespace", "searchable_content", "summary"],
+                        "required": [
+                            "memory_id",
+                            "processed_data",
+                            "importance_score",
+                            "category_primary",
+                            "namespace",
+                            "searchable_content",
+                            "summary",
+                        ],
                         "properties": {
                             "memory_id": {
                                 "bsonType": "string",
-                                "description": "Unique memory identifier"
+                                "description": "Unique memory identifier",
                             },
                             "chat_id": {
                                 "bsonType": "string",
-                                "description": "Reference to chat interaction"
+                                "description": "Reference to chat interaction",
                             },
                             "processed_data": {
                                 "bsonType": "object",
-                                "description": "Processed memory data"
+                                "description": "Processed memory data",
                             },
                             "importance_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory importance score"
+                                "description": "Memory importance score",
                             },
                             "category_primary": {
                                 "bsonType": "string",
-                                "description": "Primary memory category"
+                                "description": "Primary memory category",
                             },
                             "retention_type": {
                                 "bsonType": "string",
-                                "description": "Memory retention type"
+                                "description": "Memory retention type",
                             },
                             "namespace": {
                                 "bsonType": "string",
-                                "description": "Memory namespace"
+                                "description": "Memory namespace",
                             },
                             "created_at": {
                                 "bsonType": "date",
-                                "description": "Memory creation timestamp"
+                                "description": "Memory creation timestamp",
                             },
                             "expires_at": {
                                 "bsonType": ["date", "null"],
-                                "description": "Memory expiration timestamp"
+                                "description": "Memory expiration timestamp",
                             },
                             "access_count": {
                                 "bsonType": "int",
                                 "minimum": 0,
-                                "description": "Memory access count"
+                                "description": "Memory access count",
                             },
                             "last_accessed": {
                                 "bsonType": ["date", "null"],
-                                "description": "Last access timestamp"
+                                "description": "Last access timestamp",
                             },
                             "searchable_content": {
                                 "bsonType": "string",
-                                "description": "Searchable text content"
+                                "description": "Searchable text content",
                             },
                             "summary": {
                                 "bsonType": "string",
-                                "description": "Memory summary"
+                                "description": "Memory summary",
                             },
                             "is_permanent_context": {
                                 "bsonType": "bool",
-                                "description": "Whether memory is permanent context"
-                            }
-                        }
+                                "description": "Whether memory is permanent context",
+                            },
+                        },
                     }
                 },
                 "validationAction": "warn",
-                "validationLevel": "moderate"
+                "validationLevel": "moderate",
             },
-            
             "long_term_memory": {
                 "validator": {
                     "$jsonSchema": {
                         "bsonType": "object",
-                        "required": ["memory_id", "processed_data", "importance_score", "category_primary", "namespace", "searchable_content", "summary"],
+                        "required": [
+                            "memory_id",
+                            "processed_data",
+                            "importance_score",
+                            "category_primary",
+                            "namespace",
+                            "searchable_content",
+                            "summary",
+                        ],
                         "properties": {
                             "memory_id": {
                                 "bsonType": "string",
-                                "description": "Unique memory identifier"
+                                "description": "Unique memory identifier",
                             },
                             "original_chat_id": {
                                 "bsonType": "string",
-                                "description": "Original chat interaction reference"
+                                "description": "Original chat interaction reference",
                             },
                             "processed_data": {
                                 "bsonType": "object",
-                                "description": "Processed memory data"
+                                "description": "Processed memory data",
                             },
                             "importance_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory importance score"
+                                "description": "Memory importance score",
                             },
                             "category_primary": {
                                 "bsonType": "string",
-                                "description": "Primary memory category"
+                                "description": "Primary memory category",
                             },
                             "retention_type": {
                                 "bsonType": "string",
-                                "description": "Memory retention type"
+                                "description": "Memory retention type",
                             },
                             "namespace": {
                                 "bsonType": "string",
-                                "description": "Memory namespace"
+                                "description": "Memory namespace",
                             },
                             "created_at": {
                                 "bsonType": "date",
-                                "description": "Memory creation timestamp"
+                                "description": "Memory creation timestamp",
                             },
                             "access_count": {
                                 "bsonType": "int",
                                 "minimum": 0,
-                                "description": "Memory access count"
+                                "description": "Memory access count",
                             },
                             "searchable_content": {
                                 "bsonType": "string",
-                                "description": "Searchable text content"
+                                "description": "Searchable text content",
                             },
                             "summary": {
                                 "bsonType": "string",
-                                "description": "Memory summary"
+                                "description": "Memory summary",
                             },
                             "novelty_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory novelty score"
+                                "description": "Memory novelty score",
                             },
                             "relevance_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory relevance score"
+                                "description": "Memory relevance score",
                             },
                             "actionability_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory actionability score"
+                                "description": "Memory actionability score",
                             },
                             "classification": {
                                 "bsonType": "string",
-                                "description": "Memory classification"
+                                "description": "Memory classification",
                             },
                             "memory_importance": {
                                 "bsonType": "string",
                                 "enum": ["low", "medium", "high", "critical"],
-                                "description": "Memory importance level"
+                                "description": "Memory importance level",
                             },
                             "topic": {
                                 "bsonType": "string",
-                                "description": "Memory topic"
+                                "description": "Memory topic",
                             },
                             "entities_json": {
                                 "bsonType": "array",
-                                "description": "Extracted entities"
+                                "description": "Extracted entities",
                             },
                             "keywords_json": {
                                 "bsonType": "array",
-                                "description": "Extracted keywords"
+                                "description": "Extracted keywords",
                             },
                             "is_user_context": {
                                 "bsonType": "bool",
-                                "description": "Whether memory is user context"
+                                "description": "Whether memory is user context",
                             },
                             "is_preference": {
                                 "bsonType": "bool",
-                                "description": "Whether memory is user preference"
+                                "description": "Whether memory is user preference",
                             },
                             "is_skill_knowledge": {
                                 "bsonType": "bool",
-                                "description": "Whether memory is skill knowledge"
+                                "description": "Whether memory is skill knowledge",
                             },
                             "is_current_project": {
                                 "bsonType": "bool",
-                                "description": "Whether memory relates to current project"
+                                "description": "Whether memory relates to current project",
                             },
                             "promotion_eligible": {
                                 "bsonType": "bool",
-                                "description": "Whether memory is eligible for promotion"
+                                "description": "Whether memory is eligible for promotion",
                             },
                             "duplicate_of": {
                                 "bsonType": "string",
-                                "description": "Reference to original if duplicate"
+                                "description": "Reference to original if duplicate",
                             },
                             "supersedes_json": {
                                 "bsonType": "array",
-                                "description": "Memories this supersedes"
+                                "description": "Memories this supersedes",
                             },
                             "related_memories_json": {
                                 "bsonType": "array",
-                                "description": "Related memory references"
+                                "description": "Related memory references",
                             },
                             "confidence_score": {
                                 "bsonType": "double",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "Memory confidence score"
+                                "description": "Memory confidence score",
                             },
                             "extraction_timestamp": {
                                 "bsonType": "date",
-                                "description": "Data extraction timestamp"
+                                "description": "Data extraction timestamp",
                             },
                             "classification_reason": {
                                 "bsonType": "string",
-                                "description": "Reason for classification"
+                                "description": "Reason for classification",
                             },
                             "processed_for_duplicates": {
                                 "bsonType": "bool",
-                                "description": "Whether processed for duplicates"
+                                "description": "Whether processed for duplicates",
                             },
                             "conscious_processed": {
                                 "bsonType": "bool",
-                                "description": "Whether consciously processed"
+                                "description": "Whether consciously processed",
                             },
                             "embedding_vector": {
                                 "bsonType": "array",
-                                "items": {
-                                    "bsonType": "double"
-                                },
-                                "description": "Vector embedding for similarity search"
-                            }
-                        }
+                                "items": {"bsonType": "double"},
+                                "description": "Vector embedding for similarity search",
+                            },
+                        },
                     }
                 },
                 "validationAction": "warn",
-                "validationLevel": "moderate"
-            }
+                "validationLevel": "moderate",
+            },
         }
 
     def generate_indexes_schema(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -474,37 +495,88 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
         return {
             "chat_history": [
                 {"keys": [("chat_id", 1)], "name": "idx_chat_id", "unique": True},
-                {"keys": [("namespace", 1), ("session_id", 1)], "name": "idx_namespace_session"},
+                {
+                    "keys": [("namespace", 1), ("session_id", 1)],
+                    "name": "idx_namespace_session",
+                },
                 {"keys": [("timestamp", -1)], "name": "idx_timestamp"},
-                {"keys": [("model", 1)], "name": "idx_model"}
+                {"keys": [("model", 1)], "name": "idx_model"},
             ],
-            
             "short_term_memory": [
                 {"keys": [("memory_id", 1)], "name": "idx_memory_id", "unique": True},
-                {"keys": [("namespace", 1), ("category_primary", 1), ("importance_score", -1)], "name": "idx_namespace_category_importance"},
+                {
+                    "keys": [
+                        ("namespace", 1),
+                        ("category_primary", 1),
+                        ("importance_score", -1),
+                    ],
+                    "name": "idx_namespace_category_importance",
+                },
                 {"keys": [("expires_at", 1)], "name": "idx_expires_at", "sparse": True},
                 {"keys": [("created_at", -1)], "name": "idx_created_at"},
                 {"keys": [("chat_id", 1)], "name": "idx_chat_id", "sparse": True},
-                {"keys": [("searchable_content", "text"), ("summary", "text")], "name": "idx_text_search"},
-                {"keys": [("is_permanent_context", 1)], "name": "idx_permanent_context"},
-                {"keys": [("access_count", -1), ("last_accessed", -1)], "name": "idx_access_pattern"}
+                {
+                    "keys": [("searchable_content", "text"), ("summary", "text")],
+                    "name": "idx_text_search",
+                },
+                {
+                    "keys": [("is_permanent_context", 1)],
+                    "name": "idx_permanent_context",
+                },
+                {
+                    "keys": [("access_count", -1), ("last_accessed", -1)],
+                    "name": "idx_access_pattern",
+                },
             ],
-            
             "long_term_memory": [
                 {"keys": [("memory_id", 1)], "name": "idx_memory_id", "unique": True},
-                {"keys": [("namespace", 1), ("category_primary", 1), ("importance_score", -1)], "name": "idx_namespace_category_importance"},
+                {
+                    "keys": [
+                        ("namespace", 1),
+                        ("category_primary", 1),
+                        ("importance_score", -1),
+                    ],
+                    "name": "idx_namespace_category_importance",
+                },
                 {"keys": [("classification", 1)], "name": "idx_classification"},
                 {"keys": [("topic", 1)], "name": "idx_topic", "sparse": True},
                 {"keys": [("created_at", -1)], "name": "idx_created_at"},
-                {"keys": [("searchable_content", "text"), ("summary", "text")], "name": "idx_text_search"},
-                {"keys": [("is_user_context", 1), ("is_preference", 1), ("is_skill_knowledge", 1), ("promotion_eligible", 1)], "name": "idx_conscious_flags"},
-                {"keys": [("conscious_processed", 1)], "name": "idx_conscious_processed"},
-                {"keys": [("processed_for_duplicates", 1)], "name": "idx_duplicates_processed"},
+                {
+                    "keys": [("searchable_content", "text"), ("summary", "text")],
+                    "name": "idx_text_search",
+                },
+                {
+                    "keys": [
+                        ("is_user_context", 1),
+                        ("is_preference", 1),
+                        ("is_skill_knowledge", 1),
+                        ("promotion_eligible", 1),
+                    ],
+                    "name": "idx_conscious_flags",
+                },
+                {
+                    "keys": [("conscious_processed", 1)],
+                    "name": "idx_conscious_processed",
+                },
+                {
+                    "keys": [("processed_for_duplicates", 1)],
+                    "name": "idx_duplicates_processed",
+                },
                 {"keys": [("confidence_score", -1)], "name": "idx_confidence"},
                 {"keys": [("memory_importance", 1)], "name": "idx_memory_importance"},
-                {"keys": [("novelty_score", -1), ("relevance_score", -1), ("actionability_score", -1)], "name": "idx_scores"},
-                {"keys": [("access_count", -1), ("last_accessed", -1)], "name": "idx_access_pattern"}
-            ]
+                {
+                    "keys": [
+                        ("novelty_score", -1),
+                        ("relevance_score", -1),
+                        ("actionability_score", -1),
+                    ],
+                    "name": "idx_scores",
+                },
+                {
+                    "keys": [("access_count", -1), ("last_accessed", -1)],
+                    "name": "idx_access_pattern",
+                },
+            ],
         }
 
     def generate_vector_search_config(self) -> Dict[str, Any]:
@@ -519,10 +591,10 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
                             "path": "embedding_vector",
                             "type": "vector",
                             "similarity": "cosine",
-                            "dimensions": 1536  # OpenAI ada-002 dimensions
+                            "dimensions": 1536,  # OpenAI ada-002 dimensions
                         }
                     ]
-                }
+                },
             },
             "search_pipeline": [
                 {
@@ -531,7 +603,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
                         "path": "embedding_vector",
                         "queryVector": "<<QUERY_VECTOR>>",  # Placeholder
                         "numCandidates": 100,
-                        "limit": 10
+                        "limit": 10,
                     }
                 },
                 {
@@ -542,10 +614,10 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
                         "importance_score": 1,
                         "category_primary": 1,
                         "namespace": 1,
-                        "score": {"$meta": "vectorSearchScore"}
+                        "score": {"$meta": "vectorSearchScore"},
                     }
-                }
-            ]
+                },
+            ],
         }
 
     def generate_full_schema(self) -> str:
@@ -576,19 +648,19 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
                 "Handle data type conversions (timestamps, JSON, etc.)",
                 "Load data into MongoDB collections",
                 "Create indexes after data load",
-                "Validate data integrity"
+                "Validate data integrity",
             ],
             "considerations": [
                 "SQL foreign keys become document references or embedded documents",
-                "JSON fields in SQL become native objects in MongoDB", 
+                "JSON fields in SQL become native objects in MongoDB",
                 "SQL joins become MongoDB aggregation pipelines or embedded documents",
                 "Index strategy differs significantly between SQL and MongoDB",
-                "Vector embeddings can be stored natively in MongoDB documents"
+                "Vector embeddings can be stored natively in MongoDB documents",
             ],
             "tools": [
                 "MongoDB Compass for visual schema design",
                 "MongoDB Database Tools for import/export",
                 "Custom ETL scripts for complex transformations",
-                "MongoDB Atlas Data Lake for large-scale migrations"
-            ]
+                "MongoDB Atlas Data Lake for large-scale migrations",
+            ],
         }

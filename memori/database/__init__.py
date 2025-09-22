@@ -4,6 +4,7 @@ from .connectors import MySQLConnector, PostgreSQLConnector, SQLiteConnector
 
 try:
     from .connectors import MongoDBConnector
+
     MONGODB_AVAILABLE = True
 except ImportError:
     MongoDBConnector = None

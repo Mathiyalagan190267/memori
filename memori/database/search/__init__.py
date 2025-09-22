@@ -7,6 +7,7 @@ from .sqlite_search_adapter import SQLiteSearchAdapter
 
 try:
     from .mongodb_search_adapter import MongoDBSearchAdapter
+
     MONGODB_SEARCH_AVAILABLE = True
 except ImportError:
     MongoDBSearchAdapter = None

@@ -100,8 +100,10 @@ Be strategic and comprehensive in your search planning."""
     def _detect_database_type(self, db_manager):
         """Detect database type from db_manager"""
         if self._database_type is None:
-            self._database_type = getattr(db_manager, 'database_type', 'sql')
-            logger.debug(f"MemorySearchEngine: Detected database type: {self._database_type}")
+            self._database_type = getattr(db_manager, "database_type", "sql")
+            logger.debug(
+                f"MemorySearchEngine: Detected database type: {self._database_type}"
+            )
         return self._database_type
 
     def plan_search(
@@ -222,15 +224,18 @@ Be strategic and comprehensive in your search planning."""
             # This ensures we use the database's native search capabilities
             logger.debug(f"Executing unified database search using {db_type} manager")
             primary_results = db_manager.search_memories(
-                query=search_plan.query_text or query,
-                namespace=namespace,
-                limit=limit
+                query=search_plan.query_text or query, namespace=namespace, limit=limit
             )
-            logger.debug(f"Primary database search returned {len(primary_results)} results")
+            logger.debug(
+                f"Primary database search returned {len(primary_results)} results"
+            )
 
             # Process primary results and add search metadata
             for result in primary_results:
-                if isinstance(result, dict) and result.get("memory_id") not in seen_memory_ids:
+                if (
+                    isinstance(result, dict)
+                    and result.get("memory_id") not in seen_memory_ids
+                ):
                     seen_memory_ids.add(result["memory_id"])
                     result["search_strategy"] = f"{db_type}_unified_search"
                     result["search_reasoning"] = f"Direct {db_type} database search"
@@ -238,7 +243,9 @@ Be strategic and comprehensive in your search planning."""
 
             # If we have room for more results and specific entity filters, try keyword search
             if len(all_results) < limit and search_plan.entity_filters:
-                logger.debug(f"Adding targeted keyword search for: {search_plan.entity_filters}")
+                logger.debug(
+                    f"Adding targeted keyword search for: {search_plan.entity_filters}"
+                )
                 keyword_results = self._execute_keyword_search(
                     search_plan, db_manager, namespace, limit - len(all_results)
                 )

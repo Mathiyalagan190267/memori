@@ -66,7 +66,7 @@ class MemoryAgent:
     def _detect_database_type(self, db_manager):
         """Detect database type from db_manager"""
         if self._database_type is None:
-            self._database_type = getattr(db_manager, 'database_type', 'sql')
+            self._database_type = getattr(db_manager, "database_type", "sql")
             logger.debug(f"MemoryAgent: Detected database type: {self._database_type}")
         return self._database_type
 
