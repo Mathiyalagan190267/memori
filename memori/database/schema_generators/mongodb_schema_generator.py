@@ -3,7 +3,7 @@ MongoDB schema generator for Memori
 Defines collections, validation rules, and indexes for MongoDB
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..connectors.base_connector import BaseSchemaGenerator, DatabaseType
 
@@ -172,7 +172,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
 3. Vector Search: Use Atlas Vector Search for semantic similarity (if available)
 """
 
-    def get_data_type_mappings(self) -> Dict[str, str]:
+    def get_data_type_mappings(self) -> dict[str, str]:
         """Get MongoDB data type mappings"""
         return {
             "string": "string",
@@ -184,7 +184,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
             "objectId": "objectId",
         }
 
-    def generate_collections_schema(self) -> Dict[str, Dict[str, Any]]:
+    def generate_collections_schema(self) -> dict[str, dict[str, Any]]:
         """Generate MongoDB collections with validation schemas"""
         return {
             "chat_history": {
@@ -490,7 +490,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
             },
         }
 
-    def generate_indexes_schema(self) -> Dict[str, List[Dict[str, Any]]]:
+    def generate_indexes_schema(self) -> dict[str, list[dict[str, Any]]]:
         """Generate index specifications for MongoDB collections"""
         return {
             "chat_history": [
@@ -579,7 +579,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
             ],
         }
 
-    def generate_vector_search_config(self) -> Dict[str, Any]:
+    def generate_vector_search_config(self) -> dict[str, Any]:
         """Generate vector search configuration for MongoDB Atlas"""
         return {
             "collection": "long_term_memory",
@@ -638,7 +638,7 @@ Vector search indexes must be created through MongoDB Atlas UI or Atlas Admin AP
         ]
         return "\n".join(schema_parts)
 
-    def get_migration_strategy(self) -> Dict[str, Any]:
+    def get_migration_strategy(self) -> dict[str, Any]:
         """Get strategy for migrating from SQL databases to MongoDB"""
         return {
             "approach": "ETL Pipeline",

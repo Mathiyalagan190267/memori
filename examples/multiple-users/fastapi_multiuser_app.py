@@ -14,7 +14,6 @@ Then visit:
 """
 
 from datetime import datetime
-from typing import Dict, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -39,8 +38,8 @@ app = FastAPI(
 WEB_DATABASE_PATH = "sqlite:///fastapi_multiuser_memory.db"
 
 # Global storage for user memory instances
-user_memories: Dict[str, Memori] = {}
-user_sessions: Dict[str, dict] = {}
+user_memories: dict[str, Memori] = {}
+user_sessions: dict[str, dict] = {}
 
 
 # Pydantic models for request/response
@@ -74,7 +73,7 @@ class HealthResponse(BaseModel):
 
 
 class UsersResponse(BaseModel):
-    users: List[str]
+    users: list[str]
     total_users: int
 
 

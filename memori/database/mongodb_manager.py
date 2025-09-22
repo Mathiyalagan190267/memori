@@ -6,7 +6,7 @@ Provides MongoDB support parallel to SQLAlchemy with same interface
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -142,9 +142,7 @@ class MongoDBDatabaseManager:
                     self.client = MongoClient(self.database_connect, **client_options)
                     # Test connection
                     self.client.admin.command("ping")
-                    logger.info(
-                        "Connected to MongoDB using original connection string"
-                    )
+                    logger.info("Connected to MongoDB using original connection string")
                 except Exception as original_error:
                     logger.warning(f"Original connection failed: {original_error}")
 
@@ -199,7 +197,7 @@ class MongoDBDatabaseManager:
             self._collections[collection_name] = database[collection_name]
         return self._collections[collection_name]
 
-    def _convert_datetime_fields(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_datetime_fields(self, document: dict[str, Any]) -> dict[str, Any]:
         """Convert datetime strings to datetime objects"""
         datetime_fields = [
             "created_at",
@@ -228,7 +226,7 @@ class MongoDBDatabaseManager:
 
         return document
 
-    def _convert_to_dict(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_to_dict(self, document: dict[str, Any]) -> dict[str, Any]:
         """Convert MongoDB document to dictionary format compatible with SQLAlchemy results"""
         if not document:
             return {}
@@ -474,7 +472,7 @@ class MongoDBDatabaseManager:
         session_id: str,
         namespace: str = "default",
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Store chat history in MongoDB"""
         try:
@@ -507,9 +505,9 @@ class MongoDBDatabaseManager:
     def get_chat_history(
         self,
         namespace: str = "default",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get chat history from MongoDB"""
         try:
             collection = self._get_collection(self.CHAT_HISTORY_COLLECTION)
@@ -541,11 +539,11 @@ class MongoDBDatabaseManager:
         category_primary: str,
         retention_type: str,
         namespace: str = "default",
-        expires_at: Optional[datetime] = None,
+        expires_at: datetime | None = None,
         searchable_content: str = "",
         summary: str = "",
         is_permanent_context: bool = False,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Store short-term memory in MongoDB"""
         try:
@@ -584,7 +582,7 @@ class MongoDBDatabaseManager:
         self,
         memory_id: str,
         namespace: str = "default",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Find a specific short-term memory by memory_id"""
         try:
             collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
@@ -605,10 +603,10 @@ class MongoDBDatabaseManager:
     def get_short_term_memory(
         self,
         namespace: str = "default",
-        category_filter: Optional[str] = None,
+        category_filter: str | None = None,
         limit: int = 10,
         include_expired: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get short-term memory from MongoDB"""
         try:
             collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
@@ -650,7 +648,7 @@ class MongoDBDatabaseManager:
         query: str,
         namespace: str = "default",
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search short-term memory using MongoDB text search"""
         try:
             # Clean the query to remove common prefixes that interfere with search
@@ -744,7 +742,7 @@ class MongoDBDatabaseManager:
         self,
         namespace: str = "default",
         processed_only: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get conscious-info labeled memories from long-term memory"""
         try:
             collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
@@ -779,7 +777,7 @@ class MongoDBDatabaseManager:
     def get_unprocessed_conscious_memories(
         self,
         namespace: str = "default",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get unprocessed conscious-info labeled memories from long-term memory"""
         try:
             collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
@@ -812,7 +810,7 @@ class MongoDBDatabaseManager:
             return []
 
     def mark_conscious_memories_processed(
-        self, memory_ids: List[str], namespace: str = "default"
+        self, memory_ids: list[str], namespace: str = "default"
     ):
         """Mark conscious memories as processed"""
         try:
@@ -913,9 +911,9 @@ class MongoDBDatabaseManager:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories using MongoDB text search with SQL-compatible interface"""
         try:
             logger.debug(
@@ -1035,7 +1033,7 @@ class MongoDBDatabaseManager:
             # Return empty list to maintain compatibility with SQL manager
             return []
 
-    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+    def get_memory_stats(self, namespace: str = "default") -> dict[str, Any]:
         """Get comprehensive memory statistics"""
         try:
             database = self._get_database()
@@ -1155,7 +1153,7 @@ class MongoDBDatabaseManager:
             return {"error": str(e)}
 
     def clear_memory(
-        self, namespace: str = "default", memory_type: Optional[str] = None
+        self, namespace: str = "default", memory_type: str | None = None
     ):
         """Clear memory data"""
         try:
@@ -1300,7 +1298,7 @@ class MongoDBDatabaseManager:
             self._collections.clear()
             logger.info("MongoDB connection closed")
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get MongoDB database information and capabilities"""
         try:
             client = self._get_client()

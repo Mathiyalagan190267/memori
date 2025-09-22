@@ -4,7 +4,7 @@ Provides MongoDB-specific implementation of the database connector interface
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -127,8 +127,8 @@ class MongoDBConnector(BaseDatabaseConnector):
         return self._collections[collection_name]
 
     def execute_query(
-        self, query: str, params: Optional[List[Any]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list[Any] | None = None
+    ) -> list[dict[str, Any]]:
         """
         Execute a query-like operation in MongoDB
         Note: MongoDB doesn't use SQL, so this is adapted for MongoDB operations
@@ -181,7 +181,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute MongoDB query: {e}")
 
-    def execute_insert(self, query: str, params: Optional[List[Any]] = None) -> str:
+    def execute_insert(self, query: str, params: list[Any] | None = None) -> str:
         """Execute an insert operation and return the inserted document ID"""
         try:
             if isinstance(query, str) and query.strip().startswith("{"):
@@ -199,7 +199,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute MongoDB insert: {e}")
 
-    def execute_update(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_update(self, query: str, params: list[Any] | None = None) -> int:
         """Execute an update operation and return number of modified documents"""
         try:
             if isinstance(query, str) and query.strip().startswith("{"):
@@ -224,7 +224,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute MongoDB update: {e}")
 
-    def execute_delete(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_delete(self, query: str, params: list[Any] | None = None) -> int:
         """Execute a delete operation and return number of deleted documents"""
         try:
             if isinstance(query, str) and query.strip().startswith("{"):
@@ -249,7 +249,7 @@ class MongoDBConnector(BaseDatabaseConnector):
             raise DatabaseError(f"Failed to execute MongoDB delete: {e}")
 
     def execute_transaction(
-        self, queries: List[Tuple[str, Optional[List[Any]]]]
+        self, queries: list[tuple[str, list[Any] | None]]
     ) -> bool:
         """Execute multiple operations in a MongoDB transaction"""
         try:
@@ -303,7 +303,7 @@ class MongoDBConnector(BaseDatabaseConnector):
             logger.error(f"MongoDB connection test failed: {e}")
             return False
 
-    def initialize_schema(self, schema_sql: Optional[str] = None):
+    def initialize_schema(self, schema_sql: str | None = None):
         """Initialize MongoDB collections and indexes"""
         try:
             from ..schema_generators.mongodb_schema_generator import (
@@ -383,7 +383,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         )
 
     def create_full_text_index(
-        self, table: str, columns: List[str], index_name: str
+        self, table: str, columns: list[str], index_name: str
     ) -> str:
         """Create MongoDB text index"""
         try:
@@ -409,7 +409,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         vector_field: str,
         dimensions: int,
         similarity: str = "cosine",
-        index_name: Optional[str] = None,
+        index_name: str | None = None,
     ) -> str:
         """Create MongoDB Atlas Vector Search index"""
         try:
@@ -445,7 +445,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to create vector index: {e}")
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get MongoDB database information and capabilities"""
         try:
             client = self.get_connection()

@@ -6,7 +6,7 @@ differences between SQLite, PostgreSQL, and MySQL, particularly for
 boolean values and other database-specific syntax.
 """
 
-from typing import Any, Dict, Union
+from typing import Any
 
 from loguru import logger
 
@@ -32,7 +32,7 @@ class QueryParameterTranslator:
         self.database_type = database_type.lower()
         logger.debug(f"QueryParameterTranslator initialized for {self.database_type}")
 
-    def translate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def translate_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """
         Translate parameters to be compatible with the target database.
 
@@ -80,7 +80,7 @@ class QueryParameterTranslator:
         # Return other values unchanged
         return value
 
-    def _translate_boolean(self, value: bool) -> Union[bool, int]:
+    def _translate_boolean(self, value: bool) -> bool | int:
         """
         Translate boolean values for database compatibility.
 
@@ -159,8 +159,8 @@ class QueryParameterTranslator:
         return True
 
     def translate_query_with_parameters(
-        self, query: str, parameters: Dict[str, Any]
-    ) -> tuple[str, Dict[str, Any]]:
+        self, query: str, parameters: dict[str, Any]
+    ) -> tuple[str, dict[str, Any]]:
         """
         Translate both query and parameters for database compatibility.
 
@@ -180,17 +180,17 @@ class QueryParameterTranslator:
 
         return query, translated_params
 
-    def get_boolean_true(self) -> Union[bool, int]:
+    def get_boolean_true(self) -> bool | int:
         """Get database-appropriate TRUE value."""
         return self._translate_boolean(True)
 
-    def get_boolean_false(self) -> Union[bool, int]:
+    def get_boolean_false(self) -> bool | int:
         """Get database-appropriate FALSE value."""
         return self._translate_boolean(False)
 
 
 # Convenience functions for common boolean translations
-def get_db_boolean(value: bool, database_type: str) -> Union[bool, int]:
+def get_db_boolean(value: bool, database_type: str) -> bool | int:
     """
     Get database-appropriate boolean value.
 
@@ -206,8 +206,8 @@ def get_db_boolean(value: bool, database_type: str) -> Union[bool, int]:
 
 
 def translate_query_params(
-    parameters: Dict[str, Any], database_type: str
-) -> Dict[str, Any]:
+    parameters: dict[str, Any], database_type: str
+) -> dict[str, Any]:
     """
     Convenience function to translate query parameters.
 

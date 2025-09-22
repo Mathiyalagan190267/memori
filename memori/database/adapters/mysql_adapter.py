@@ -2,7 +2,7 @@
 MySQL-specific search adapter with FULLTEXT support and proper security
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -25,9 +25,9 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MySQL FULLTEXT search with proper validation"""
         try:
             # Validate all parameters
@@ -65,7 +65,7 @@ class MySQLSearchAdapter(BaseSearchAdapter):
                 query, namespace, category_filter, limit
             )
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create MySQL-specific search indexes"""
         indexes = []
 
@@ -182,9 +182,9 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute LIKE-based fallback search for MySQL"""
         try:
             return self.query_executor.execute_search(
@@ -277,7 +277,7 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         except Exception as e:
             logger.warning(f"FULLTEXT index repair failed: {e}")
 
-    def get_fulltext_statistics(self) -> Dict[str, Any]:
+    def get_fulltext_statistics(self) -> dict[str, Any]:
         """Get statistics about FULLTEXT usage and performance"""
         stats = {}
 

@@ -7,7 +7,7 @@ import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .exceptions import SecurityError
 from .input_validator import InputValidator
@@ -44,15 +44,15 @@ class SecurityFinding:
     description: str
     location: str
     recommendation: str
-    evidence: Optional[str] = None
-    remediation_code: Optional[str] = None
+    evidence: str | None = None
+    remediation_code: str | None = None
 
 
 @dataclass
 class SecurityAuditReport:
     """Security audit report"""
 
-    findings: List[SecurityFinding]
+    findings: list[SecurityFinding]
     total_queries_audited: int
     critical_count: int
     high_count: int
@@ -143,9 +143,9 @@ class DatabaseSecurityAuditor:
     def audit_query(
         self,
         query: str,
-        params: Optional[List[Any]] = None,
-        context: Optional[str] = None,
-    ) -> List[SecurityFinding]:
+        params: list[Any] | None = None,
+        context: str | None = None,
+    ) -> list[SecurityFinding]:
         """Audit a single database query for security vulnerabilities"""
         findings = []
         self.queries_audited += 1
@@ -169,8 +169,8 @@ class DatabaseSecurityAuditor:
         return findings
 
     def _audit_sql_injection(
-        self, query: str, params: Optional[List[Any]], context: Optional[str]
-    ) -> List[SecurityFinding]:
+        self, query: str, params: list[Any] | None, context: str | None
+    ) -> list[SecurityFinding]:
         """Audit for SQL injection vulnerabilities"""
         findings = []
         query_lower = query.lower()
@@ -219,8 +219,8 @@ class DatabaseSecurityAuditor:
         return findings
 
     def _audit_parameter_validation(
-        self, query: str, params: Optional[List[Any]], context: Optional[str]
-    ) -> List[SecurityFinding]:
+        self, query: str, params: list[Any] | None, context: str | None
+    ) -> list[SecurityFinding]:
         """Audit parameter validation"""
         findings = []
 
@@ -285,8 +285,8 @@ class DatabaseSecurityAuditor:
         return findings
 
     def _audit_privilege_operations(
-        self, query: str, context: Optional[str]
-    ) -> List[SecurityFinding]:
+        self, query: str, context: str | None
+    ) -> list[SecurityFinding]:
         """Audit for privilege escalation attempts"""
         findings = []
         query_upper = query.upper().strip()
@@ -334,8 +334,8 @@ class DatabaseSecurityAuditor:
         return findings
 
     def _audit_data_exposure(
-        self, query: str, context: Optional[str]
-    ) -> List[SecurityFinding]:
+        self, query: str, context: str | None
+    ) -> list[SecurityFinding]:
         """Audit for potential data exposure issues"""
         findings = []
         query_upper = query.upper()
@@ -397,10 +397,10 @@ class DatabaseSecurityAuditor:
     def validate_query_safety(
         self,
         query: str,
-        params: Optional[List[Any]] = None,
-        context: Optional[str] = None,
+        params: list[Any] | None = None,
+        context: str | None = None,
         strict_mode: bool = True,
-    ) -> Tuple[bool, List[SecurityFinding]]:
+    ) -> tuple[bool, list[SecurityFinding]]:
         """Validate if a query is safe to execute"""
         findings = self.audit_query(query, params, context)
 
@@ -444,7 +444,7 @@ class DatabaseSecurityAuditor:
             overall_risk_score=risk_score,
         )
 
-    def get_remediation_suggestions(self) -> Dict[VulnerabilityType, List[str]]:
+    def get_remediation_suggestions(self) -> dict[VulnerabilityType, list[str]]:
         """Get remediation suggestions grouped by vulnerability type"""
         suggestions = {
             VulnerabilityType.SQL_INJECTION: [
@@ -503,10 +503,10 @@ class SecureQueryBuilder:
     def build_safe_select(
         self,
         table: str,
-        columns: List[str],
-        where_conditions: Dict[str, Any],
-        limit: Optional[int] = None,
-    ) -> Tuple[str, List[Any]]:
+        columns: list[str],
+        where_conditions: dict[str, Any],
+        limit: int | None = None,
+    ) -> tuple[str, list[Any]]:
         """Build a safe SELECT query"""
         # Validate inputs
         table = InputValidator.sanitize_sql_identifier(table)
@@ -541,8 +541,8 @@ class SecureQueryBuilder:
         return query, params
 
     def build_safe_insert(
-        self, table: str, data: Dict[str, Any]
-    ) -> Tuple[str, List[Any]]:
+        self, table: str, data: dict[str, Any]
+    ) -> tuple[str, list[Any]]:
         """Build a safe INSERT query"""
         # Validate inputs
         table = InputValidator.sanitize_sql_identifier(table)
@@ -580,14 +580,14 @@ def get_security_auditor() -> DatabaseSecurityAuditor:
 
 
 def audit_query(
-    query: str, params: Optional[List[Any]] = None, context: Optional[str] = None
-) -> List[SecurityFinding]:
+    query: str, params: list[Any] | None = None, context: str | None = None
+) -> list[SecurityFinding]:
     """Convenience function to audit a single query"""
     return _global_auditor.audit_query(query, params, context)
 
 
 def validate_query_safety(
-    query: str, params: Optional[List[Any]] = None, context: Optional[str] = None
+    query: str, params: list[Any] | None = None, context: str | None = None
 ) -> bool:
     """Convenience function to validate query safety"""
     is_safe, _ = _global_auditor.validate_query_safety(query, params, context)

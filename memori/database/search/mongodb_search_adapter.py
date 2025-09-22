@@ -3,7 +3,7 @@ MongoDB-specific search adapter with Atlas Vector Search support
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -48,9 +48,9 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MongoDB text search with proper validation"""
         try:
             # Validate all parameters
@@ -90,9 +90,9 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MongoDB $text search across collections"""
         results = []
 
@@ -147,12 +147,12 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
 
     def execute_vector_search(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
         similarity_threshold: float = 0.7,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MongoDB Atlas Vector Search"""
         try:
             if not self._check_vector_search_available():
@@ -196,12 +196,12 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
 
     def _build_vector_search_pipeline(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
         similarity_threshold: float,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Build MongoDB aggregation pipeline for vector search"""
         pipeline = [
             # Vector search stage (Atlas only)
@@ -257,13 +257,13 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
     def execute_hybrid_search(
         self,
         query: str,
-        query_vector: Optional[List[float]] = None,
+        query_vector: list[float] | None = None,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
         text_weight: float = 0.5,
         vector_weight: float = 0.5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute hybrid search combining text and vector search"""
         try:
             text_results = []
@@ -295,12 +295,12 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
 
     def _combine_search_results(
         self,
-        text_results: List[Dict[str, Any]],
-        vector_results: List[Dict[str, Any]],
+        text_results: list[dict[str, Any]],
+        vector_results: list[dict[str, Any]],
         text_weight: float,
         vector_weight: float,
         limit: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Combine text and vector search results with weighted scoring"""
         # Create lookup for faster deduplication
         seen_memories = {}
@@ -363,7 +363,7 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         )
         return combined_results[:limit]
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create MongoDB-specific search indexes"""
         indexes_created = []
 
@@ -432,9 +432,9 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute regex-based fallback search for MongoDB"""
         try:
             results = []
@@ -511,7 +511,7 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
             logger.error(f"Fallback search failed: {e}")
             return []
 
-    def _convert_document_to_memory(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_document_to_memory(self, document: dict[str, Any]) -> dict[str, Any]:
         """Convert MongoDB document to memory format"""
         if not document:
             return {}
@@ -631,7 +631,7 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         except Exception as e:
             logger.warning(f"MongoDB search optimization failed: {e}")
 
-    def get_search_capabilities(self) -> Dict[str, Any]:
+    def get_search_capabilities(self) -> dict[str, Any]:
         """Get MongoDB search capabilities"""
         return {
             "text_search": self._check_text_search_available(),

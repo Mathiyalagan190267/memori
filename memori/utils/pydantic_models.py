@@ -4,7 +4,7 @@ Pydantic Models for Structured Memory Processing
 
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -85,7 +85,7 @@ class ExtractedEntity(BaseModel):
     relevance_score: RelevanceScore = Field(
         description="How relevant this entity is to the memory"
     )
-    context: Optional[str] = Field(
+    context: str | None = Field(
         default=None, description="Additional context about this entity"
     )
 
@@ -93,28 +93,28 @@ class ExtractedEntity(BaseModel):
 class ExtractedEntities(BaseModel):
     """All entities extracted from a conversation"""
 
-    people: List[str] = Field(
+    people: list[str] = Field(
         default_factory=list, description="Names of people mentioned"
     )
-    technologies: List[str] = Field(
+    technologies: list[str] = Field(
         default_factory=list, description="Technologies, tools, libraries mentioned"
     )
-    topics: List[str] = Field(
+    topics: list[str] = Field(
         default_factory=list, description="Main topics or subjects discussed"
     )
-    skills: List[str] = Field(
+    skills: list[str] = Field(
         default_factory=list, description="Skills, abilities, or competencies mentioned"
     )
-    projects: List[str] = Field(
+    projects: list[str] = Field(
         default_factory=list,
         description="Projects, repositories, or initiatives mentioned",
     )
-    keywords: List[str] = Field(
+    keywords: list[str] = Field(
         default_factory=list, description="Important keywords for search"
     )
 
     # Structured entities with metadata
-    structured_entities: List[ExtractedEntity] = Field(
+    structured_entities: list[ExtractedEntity] = Field(
         default_factory=list, description="Detailed entity extraction"
     )
 
@@ -150,13 +150,13 @@ class MemorySearchQuery(BaseModel):
     intent: str = Field(description="Interpreted intent of the query")
 
     # Search parameters
-    entity_filters: List[str] = Field(
+    entity_filters: list[str] = Field(
         default_factory=list, description="Specific entities to search for"
     )
-    category_filters: List[MemoryCategoryType] = Field(
+    category_filters: list[MemoryCategoryType] = Field(
         default_factory=list, description="Memory categories to include"
     )
-    time_range: Optional[str] = Field(
+    time_range: str | None = Field(
         default=None, description="Time range for search (e.g., 'last_week')"
     )
     min_importance: ImportanceScore = Field(
@@ -164,10 +164,10 @@ class MemorySearchQuery(BaseModel):
     )
 
     # Search strategy
-    search_strategy: List[str] = Field(
+    search_strategy: list[str] = Field(
         default_factory=list, description="Recommended search strategies"
     )
-    expected_result_types: List[str] = Field(
+    expected_result_types: list[str] = Field(
         default_factory=list, description="Expected types of results"
     )
 
@@ -190,7 +190,7 @@ class UserRule(BaseModel):
     rule_text: str = Field(description="The rule or preference in natural language")
     rule_type: Literal["preference", "instruction", "constraint", "goal"]
     priority: PriorityLevel = Field(default=5, description="Priority level (1-10)")
-    context: Optional[str] = Field(default=None, description="When this rule applies")
+    context: str | None = Field(default=None, description="When this rule applies")
     active: bool = Field(
         default=True, description="Whether this rule is currently active"
     )
@@ -201,29 +201,29 @@ class ConversationContext(BaseModel):
 
     model_config = {"protected_namespaces": ()}
 
-    user_id: Optional[str] = Field(default=None)
+    user_id: str | None = Field(default=None)
     session_id: str
     conversation_id: str
     model_used: str
 
     # User context
-    user_preferences: List[str] = Field(default_factory=list)
-    current_projects: List[str] = Field(default_factory=list)
-    relevant_skills: List[str] = Field(default_factory=list)
+    user_preferences: list[str] = Field(default_factory=list)
+    current_projects: list[str] = Field(default_factory=list)
+    relevant_skills: list[str] = Field(default_factory=list)
 
     # Conversation metadata
     conversation_length: int = Field(
         default=1, description="Number of exchanges in this conversation"
     )
-    topic_thread: Optional[str] = Field(
+    topic_thread: str | None = Field(
         default=None, description="Main topic thread being discussed"
     )
 
     # Memory context
-    recent_memories: List[str] = Field(
+    recent_memories: list[str] = Field(
         default_factory=list, description="IDs of recently accessed memories"
     )
-    applied_rules: List[str] = Field(
+    applied_rules: list[str] = Field(
         default_factory=list, description="Rules that were applied"
     )
 
@@ -239,7 +239,7 @@ class ProcessedMemory(BaseModel):
         description="Why this memory should or shouldn't be stored"
     )
     timestamp: datetime = Field(default_factory=datetime.now)
-    processing_metadata: Optional[Dict[str, str]] = Field(default=None)
+    processing_metadata: dict[str, str] | None = Field(default=None)
 
 
 class ProcessedLongTermMemory(BaseModel):
@@ -252,11 +252,11 @@ class ProcessedLongTermMemory(BaseModel):
     importance: MemoryImportanceLevel = Field(description="Importance level")
 
     # Context Information
-    topic: Optional[str] = Field(default=None, description="Main topic/subject")
-    entities: List[str] = Field(
+    topic: str | None = Field(default=None, description="Main topic/subject")
+    entities: list[str] = Field(
         default_factory=list, description="People, places, technologies mentioned"
     )
-    keywords: List[str] = Field(
+    keywords: list[str] = Field(
         default_factory=list, description="Key terms for search"
     )
 
@@ -271,13 +271,13 @@ class ProcessedLongTermMemory(BaseModel):
     is_current_project: bool = Field(default=False, description="Current work context")
 
     # Memory Management
-    duplicate_of: Optional[str] = Field(
+    duplicate_of: str | None = Field(
         default=None, description="Links to original if duplicate"
     )
-    supersedes: List[str] = Field(
+    supersedes: list[str] = Field(
         default_factory=list, description="Previous memories this replaces"
     )
-    related_memories: List[str] = Field(
+    related_memories: list[str] = Field(
         default_factory=list, description="Connected memory IDs"
     )
 
@@ -287,7 +287,7 @@ class ProcessedLongTermMemory(BaseModel):
         default=0.8, description="AI confidence in extraction"
     )
     extraction_timestamp: datetime = Field(default_factory=datetime.now)
-    last_accessed: Optional[datetime] = Field(default=None)
+    last_accessed: datetime | None = Field(default=None)
     access_count: int = Field(default=0)
 
     # Classification Reasoning
@@ -308,38 +308,38 @@ class UserContextProfile(BaseModel):
     """Permanent user context for conscious ingestion"""
 
     # Core Identity
-    name: Optional[str] = None
-    pronouns: Optional[str] = None
-    location: Optional[str] = None
-    timezone: Optional[str] = None
+    name: str | None = None
+    pronouns: str | None = None
+    location: str | None = None
+    timezone: str | None = None
 
     # Professional Context
-    job_title: Optional[str] = None
-    company: Optional[str] = None
-    industry: Optional[str] = None
-    experience_level: Optional[str] = None
-    specializations: List[str] = Field(default_factory=list)
+    job_title: str | None = None
+    company: str | None = None
+    industry: str | None = None
+    experience_level: str | None = None
+    specializations: list[str] = Field(default_factory=list)
 
     # Technical Stack
-    primary_languages: List[str] = Field(default_factory=list)
-    frameworks: List[str] = Field(default_factory=list)
-    tools: List[str] = Field(default_factory=list)
-    environment: Optional[str] = None
+    primary_languages: list[str] = Field(default_factory=list)
+    frameworks: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    environment: str | None = None
 
     # Behavioral Preferences
-    communication_style: Optional[str] = None
-    technical_depth: Optional[str] = None
-    response_preference: Optional[str] = None
+    communication_style: str | None = None
+    technical_depth: str | None = None
+    response_preference: str | None = None
 
     # Current Context
-    active_projects: List[str] = Field(default_factory=list)
-    learning_goals: List[str] = Field(default_factory=list)
-    domain_expertise: List[str] = Field(default_factory=list)
+    active_projects: list[str] = Field(default_factory=list)
+    learning_goals: list[str] = Field(default_factory=list)
+    domain_expertise: list[str] = Field(default_factory=list)
 
     # Values & Constraints
-    code_standards: List[str] = Field(default_factory=list)
-    time_constraints: Optional[str] = None
-    technology_preferences: List[str] = Field(default_factory=list)
+    code_standards: list[str] = Field(default_factory=list)
+    time_constraints: str | None = None
+    technology_preferences: list[str] = Field(default_factory=list)
 
     # Metadata
     last_updated: datetime = Field(default_factory=datetime.now)
@@ -350,11 +350,11 @@ class MemoryStats(BaseModel):
     """Statistics about stored memories"""
 
     total_memories: int
-    memories_by_category: Dict[str, int]
-    memories_by_retention: Dict[str, int]
+    memories_by_category: dict[str, int]
+    memories_by_retention: dict[str, int]
     average_importance: float
     total_entities: int
-    most_common_entities: List[Tuple[str, int]]
+    most_common_entities: list[tuple[str, int]]
     storage_size_mb: float
-    oldest_memory_date: Optional[datetime]
-    newest_memory_date: Optional[datetime]
+    oldest_memory_date: datetime | None
+    newest_memory_date: datetime | None

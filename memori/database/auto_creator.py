@@ -6,7 +6,6 @@ PostgreSQL and MySQL with proper error handling and security validation.
 """
 
 import ssl
-from typing import Dict
 from urllib.parse import parse_qs, urlparse
 
 from loguru import logger
@@ -77,7 +76,7 @@ class DatabaseAutoCreator:
             # This allows graceful degradation if user has manual setup
             return connection_string
 
-    def _database_exists(self, components: Dict[str, str]) -> bool:
+    def _database_exists(self, components: dict[str, str]) -> bool:
         """Check if target database exists."""
         try:
             engine = components["engine"]
@@ -94,7 +93,7 @@ class DatabaseAutoCreator:
             logger.error(f"Failed to check database existence: {e}")
             return False
 
-    def _postgresql_database_exists(self, components: Dict[str, str]) -> bool:
+    def _postgresql_database_exists(self, components: dict[str, str]) -> bool:
         """Check if PostgreSQL database exists."""
         try:
             # Connect to postgres system database
@@ -114,7 +113,7 @@ class DatabaseAutoCreator:
             logger.error(f"PostgreSQL database existence check failed: {e}")
             return False
 
-    def _get_mysql_connect_args(self, original_url: str) -> Dict:
+    def _get_mysql_connect_args(self, original_url: str) -> dict:
         """Get MySQL connection arguments with SSL support for system database connections."""
         connect_args = {"charset": "utf8mb4"}
 
@@ -146,7 +145,7 @@ class DatabaseAutoCreator:
 
         return connect_args
 
-    def _mysql_database_exists(self, components: Dict[str, str]) -> bool:
+    def _mysql_database_exists(self, components: dict[str, str]) -> bool:
         """Check if MySQL database exists."""
         try:
             # Connect to mysql system database with SSL support
@@ -180,7 +179,7 @@ class DatabaseAutoCreator:
             logger.error(f"MySQL database existence check failed: {e}")
             return False
 
-    def _create_database(self, components: Dict[str, str]) -> None:
+    def _create_database(self, components: dict[str, str]) -> None:
         """Create the target database."""
         engine = components["engine"]
 
@@ -191,7 +190,7 @@ class DatabaseAutoCreator:
         else:
             raise ValueError(f"Database creation not supported for {engine}")
 
-    def _create_postgresql_database(self, components: Dict[str, str]) -> None:
+    def _create_postgresql_database(self, components: dict[str, str]) -> None:
         """Create PostgreSQL database."""
         try:
             logger.info(f"Creating PostgreSQL database '{components['database']}'...")
@@ -230,7 +229,7 @@ class DatabaseAutoCreator:
         except Exception as e:
             raise RuntimeError(f"Unexpected error creating PostgreSQL database: {e}")
 
-    def _create_mysql_database(self, components: Dict[str, str]) -> None:
+    def _create_mysql_database(self, components: dict[str, str]) -> None:
         """Create MySQL database."""
         try:
             logger.info(f"Creating MySQL database '{components['database']}'...")
@@ -281,7 +280,7 @@ class DatabaseAutoCreator:
         except Exception as e:
             raise RuntimeError(f"Unexpected error creating MySQL database: {e}")
 
-    def get_database_info(self, connection_string: str) -> Dict[str, str]:
+    def get_database_info(self, connection_string: str) -> dict[str, str]:
         """
         Get detailed information about database from connection string.
 

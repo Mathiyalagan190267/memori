@@ -71,8 +71,8 @@ from .utils import (  # Pydantic models; Enhanced exceptions; Validators and hel
 )
 
 # Memory agents (dynamically imported to avoid import errors)
-MemoryAgent: Optional[Any] = None
-MemorySearchEngine: Optional[Any] = None
+MemoryAgent: Any | None = None
+MemorySearchEngine: Any | None = None
 _AGENTS_AVAILABLE = False
 
 try:

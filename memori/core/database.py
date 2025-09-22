@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -232,7 +232,7 @@ class DatabaseManager:
         session_id: str,
         namespace: str = "default",
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Store chat history with input validation"""
         try:
@@ -280,9 +280,9 @@ class DatabaseManager:
     def get_chat_history(
         self,
         namespace: str = "default",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get chat history with optional session filtering"""
         try:
             # Validate inputs
@@ -510,9 +510,9 @@ class DatabaseManager:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Advanced memory search with hybrid approach: FTS + Entity + Category filtering"""
         try:
             # Validate and sanitize all input parameters
@@ -594,7 +594,7 @@ class DatabaseManager:
         cursor,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
     ):
         """Execute FTS5 search with proper parameterization"""
@@ -712,7 +712,7 @@ class DatabaseManager:
             return []
 
     def _execute_category_search(
-        self, cursor, query: str, namespace: str, category_filter: List[str], limit: int
+        self, cursor, query: str, namespace: str, category_filter: list[str], limit: int
     ):
         """Execute category-based search with proper input validation"""
         try:
@@ -762,7 +762,7 @@ class DatabaseManager:
         cursor,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
     ):
         """Execute fallback LIKE search with proper input validation"""
@@ -887,7 +887,7 @@ class DatabaseManager:
         else:
             return "short_term_memory"
 
-    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+    def get_memory_stats(self, namespace: str = "default") -> dict[str, Any]:
         """Get comprehensive memory statistics"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -952,7 +952,7 @@ class DatabaseManager:
             return stats
 
     def clear_memory(
-        self, namespace: str = "default", memory_type: Optional[str] = None
+        self, namespace: str = "default", memory_type: str | None = None
     ):
         """Clear memory data with entity cleanup"""
         with self._get_connection() as conn:

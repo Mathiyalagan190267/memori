@@ -9,7 +9,6 @@ Supports both SQL and MongoDB database backends.
 
 import json
 from datetime import datetime
-from typing import List
 
 from loguru import logger
 
@@ -259,7 +258,7 @@ class ConsciouscAgent:
             )
             return False
 
-    async def _get_conscious_memories(self, db_manager, namespace: str) -> List:
+    async def _get_conscious_memories(self, db_manager, namespace: str) -> list:
         """Get all conscious-info labeled memories from long-term memory (database-agnostic)"""
         try:
             db_type = self._detect_database_type(db_manager)
@@ -291,7 +290,7 @@ class ConsciouscAgent:
 
     async def _get_unprocessed_conscious_memories(
         self, db_manager, namespace: str
-    ) -> List:
+    ) -> list:
         """Get unprocessed conscious-info labeled memories from long-term memory (database-agnostic)"""
         try:
             db_type = self._detect_database_type(db_manager)
@@ -521,7 +520,7 @@ class ConsciouscAgent:
             return False
 
     async def _mark_memories_processed(
-        self, db_manager, memory_ids: List[str], namespace: str
+        self, db_manager, memory_ids: list[str], namespace: str
     ):
         """Mark memories as processed for conscious context (database-agnostic)"""
         try:

@@ -4,7 +4,7 @@ SQLite connector for Memori v1.0
 
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -68,8 +68,8 @@ class SQLiteConnector(BaseDatabaseConnector):
             raise DatabaseError(f"Failed to connect to SQLite database: {e}")
 
     def execute_query(
-        self, query: str, params: Optional[List] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a query and return results"""
         try:
             with self.get_connection() as conn:
@@ -89,7 +89,7 @@ class SQLiteConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute query: {e}")
 
-    def execute_insert(self, query: str, params: Optional[List] = None) -> str:
+    def execute_insert(self, query: str, params: list | None = None) -> str:
         """Execute an insert query and return the inserted row ID"""
         try:
             with self.get_connection() as conn:
@@ -105,7 +105,7 @@ class SQLiteConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute insert: {e}")
 
-    def execute_update(self, query: str, params: Optional[List] = None) -> int:
+    def execute_update(self, query: str, params: list | None = None) -> int:
         """Execute an update query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -121,7 +121,7 @@ class SQLiteConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute update: {e}")
 
-    def execute_delete(self, query: str, params: Optional[List] = None) -> int:
+    def execute_delete(self, query: str, params: list | None = None) -> int:
         """Execute a delete query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -137,7 +137,7 @@ class SQLiteConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute delete: {e}")
 
-    def execute_transaction(self, queries: List[tuple]) -> bool:
+    def execute_transaction(self, queries: list[tuple]) -> bool:
         """Execute multiple queries in a transaction"""
         try:
             with self.get_connection() as conn:
@@ -166,7 +166,7 @@ class SQLiteConnector(BaseDatabaseConnector):
             logger.error(f"Connection test failed: {e}")
             return False
 
-    def initialize_schema(self, schema_sql: Optional[str] = None):
+    def initialize_schema(self, schema_sql: str | None = None):
         """Initialize SQLite database schema"""
         try:
             if not schema_sql:
@@ -221,7 +221,7 @@ class SQLiteConnector(BaseDatabaseConnector):
             return False
 
     def create_full_text_index(
-        self, table: str, columns: List[str], index_name: str
+        self, table: str, columns: list[str], index_name: str
     ) -> str:
         """Create SQLite FTS5 virtual table"""
         # Validate inputs
@@ -236,7 +236,7 @@ class SQLiteConnector(BaseDatabaseConnector):
         columns_str = ", ".join(columns)
         return f"CREATE VIRTUAL TABLE {index_name} USING fts5({columns_str})"
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get SQLite database information and capabilities"""
         try:
             with self.get_connection() as conn:
@@ -280,7 +280,7 @@ class SQLiteConnector(BaseDatabaseConnector):
                 "error": str(e),
             }
 
-    def _split_sqlite_statements(self, schema_sql: str) -> List[str]:
+    def _split_sqlite_statements(self, schema_sql: str) -> list[str]:
         """Split SQL schema into individual statements handling SQLite syntax"""
         statements = []
         current_statement = []

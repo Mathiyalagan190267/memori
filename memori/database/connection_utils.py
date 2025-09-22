@@ -6,7 +6,6 @@ and managing multi-database scenarios for memori instances.
 """
 
 import re
-from typing import Dict, Tuple
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -24,7 +23,7 @@ class DatabaseConnectionUtils:
     }
 
     @classmethod
-    def parse_connection_string(cls, connection_string: str) -> Dict[str, str]:
+    def parse_connection_string(cls, connection_string: str) -> dict[str, str]:
         """
         Parse database connection string and extract components.
 
@@ -101,7 +100,7 @@ class DatabaseConnectionUtils:
 
     @classmethod
     def build_connection_string(
-        cls, components: Dict[str, str], target_database: str
+        cls, components: dict[str, str], target_database: str
     ) -> str:
         """
         Build connection string with specific database name.
@@ -190,7 +189,7 @@ class DatabaseConnectionUtils:
         return database_name
 
     @classmethod
-    def extract_database_info(cls, connection_string: str) -> Tuple[str, str, bool]:
+    def extract_database_info(cls, connection_string: str) -> tuple[str, str, bool]:
         """
         Extract database engine, name, and creation requirement.
 

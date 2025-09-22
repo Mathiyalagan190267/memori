@@ -7,7 +7,7 @@ import json
 import threading
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import openai
 from loguru import logger
@@ -58,8 +58,8 @@ Be strategic and comprehensive in your search planning."""
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
+        api_key: str | None = None,
+        model: str | None = None,
         provider_config: Optional["ProviderConfig"] = None,
     ):
         """
@@ -107,7 +107,7 @@ Be strategic and comprehensive in your search planning."""
         return self._database_type
 
     def plan_search(
-        self, query: str, context: Optional[str] = None
+        self, query: str, context: str | None = None
     ) -> MemorySearchQuery:
         """
         Plan search strategy for a user query using OpenAI Structured Outputs with caching
@@ -194,7 +194,7 @@ Be strategic and comprehensive in your search planning."""
 
     def execute_search(
         self, query: str, db_manager, namespace: str = "default", limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute intelligent search using planned strategies
 
@@ -372,7 +372,7 @@ Be strategic and comprehensive in your search planning."""
 
     def _execute_keyword_search(
         self, search_plan: MemorySearchQuery, db_manager, namespace: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute keyword-based search"""
         keywords = search_plan.entity_filters
         if not keywords:
@@ -408,7 +408,7 @@ Be strategic and comprehensive in your search planning."""
 
     def _execute_category_search(
         self, search_plan: MemorySearchQuery, db_manager, namespace: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute category-based search"""
         categories = (
             [cat.value for cat in search_plan.category_filters]
@@ -683,7 +683,7 @@ Be strategic and comprehensive in your search planning."""
 }"""
 
     def _create_search_query_from_dict(
-        self, data: Dict[str, Any], original_query: str
+        self, data: dict[str, Any], original_query: str
     ) -> MemorySearchQuery:
         """
         Create MemorySearchQuery from dictionary with proper validation and defaults
@@ -725,7 +725,7 @@ Be strategic and comprehensive in your search planning."""
 
     def _execute_importance_search(
         self, search_plan: MemorySearchQuery, db_manager, namespace: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute importance-based search"""
         min_importance = max(
             search_plan.min_importance, 0.7
@@ -766,7 +766,7 @@ Be strategic and comprehensive in your search planning."""
 
     async def execute_search_async(
         self, query: str, db_manager, namespace: str = "default", limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Async version of execute_search for better performance in background processing
         """
@@ -881,7 +881,7 @@ Be strategic and comprehensive in your search planning."""
 
     def search_memories(
         self, query: str, max_results: int = 5, namespace: str = "default"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Simple search interface for compatibility with memory tools
 

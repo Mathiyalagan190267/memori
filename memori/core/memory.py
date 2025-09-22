@@ -6,7 +6,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -41,30 +41,30 @@ class Memori:
         self,
         database_connect: str = "sqlite:///memori.db",
         template: str = "basic",
-        mem_prompt: Optional[str] = None,
+        mem_prompt: str | None = None,
         conscious_ingest: bool = False,
         auto_ingest: bool = False,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         shared_memory: bool = False,
-        memory_filters: Optional[Dict[str, Any]] = None,
-        openai_api_key: Optional[str] = None,
-        user_id: Optional[str] = None,
+        memory_filters: dict[str, Any] | None = None,
+        openai_api_key: str | None = None,
+        user_id: str | None = None,
         verbose: bool = False,
         # New provider configuration parameters
-        api_key: Optional[str] = None,
-        api_type: Optional[str] = None,
-        base_url: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
-        api_version: Optional[str] = None,
-        azure_ad_token: Optional[str] = None,
-        organization: Optional[str] = None,
-        project: Optional[str] = None,
-        model: Optional[str] = None,  # Allow custom model selection
-        provider_config: Optional[Any] = None,  # ProviderConfig when available
+        api_key: str | None = None,
+        api_type: str | None = None,
+        base_url: str | None = None,
+        azure_endpoint: str | None = None,
+        azure_deployment: str | None = None,
+        api_version: str | None = None,
+        azure_ad_token: str | None = None,
+        organization: str | None = None,
+        project: str | None = None,
+        model: str | None = None,  # Allow custom model selection
+        provider_config: Any | None = None,  # ProviderConfig when available
         schema_init: bool = True,  # Initialize database schema and create tables
-        database_prefix: Optional[str] = None,  # Database name prefix
-        database_suffix: Optional[str] = None,  # Database name suffix
+        database_prefix: str | None = None,  # Database name prefix
+        database_suffix: str | None = None,  # Database name suffix
     ):
         """
         Initialize Memori memory system v1.0.
@@ -630,7 +630,7 @@ class Memori:
             )
             return False
 
-    def enable(self, interceptors: Optional[List[str]] = None):
+    def enable(self, interceptors: list[str] | None = None):
         """
         Enable universal memory recording using LiteLLM's native callback system.
 
@@ -723,11 +723,11 @@ class Memori:
 
     # Memory system status and control methods
 
-    def get_interceptor_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_interceptor_status(self) -> dict[str, dict[str, Any]]:
         """Get status of memory recording system"""
         return self.memory_manager.get_status()
 
-    def get_interceptor_health(self) -> Dict[str, Any]:
+    def get_interceptor_health(self) -> dict[str, Any]:
         """Get health check of interceptor system"""
         return self.memory_manager.get_health()
 
@@ -1013,7 +1013,7 @@ class Memori:
 
         return params
 
-    def _get_conscious_context(self) -> List[Dict[str, Any]]:
+    def _get_conscious_context(self) -> list[dict[str, Any]]:
         """
         Get conscious context from ALL short-term memory summaries.
         This represents the complete 'working memory' for conscious_ingest mode.
@@ -1100,7 +1100,7 @@ class Memori:
             logger.error(f"Failed to get conscious context: {e}")
             return []
 
-    def _get_auto_ingest_context(self, user_input: str) -> List[Dict[str, Any]]:
+    def _get_auto_ingest_context(self, user_input: str) -> list[dict[str, Any]]:
         """
         Get auto-ingest context using retrieval agent for intelligent search.
         Searches through entire database for relevant memories.
@@ -1303,7 +1303,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Failed to record OpenAI conversation: {e}")
 
-    def _extract_openai_user_input(self, messages: List[Dict]) -> str:
+    def _extract_openai_user_input(self, messages: list[dict]) -> str:
         """Extract user input from OpenAI messages with support for complex content types"""
         user_input = ""
         try:
@@ -1382,8 +1382,8 @@ class Memori:
         return ai_output
 
     def _extract_openai_metadata(
-        self, kwargs: Dict, response, tokens_used: int
-    ) -> Dict:
+        self, kwargs: dict, response, tokens_used: int
+    ) -> dict:
         """Extract comprehensive metadata from OpenAI request and response"""
         metadata = {
             "integration": "openai_auto",
@@ -1477,7 +1477,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Failed to record Anthropic conversation: {e}")
 
-    def _extract_anthropic_user_input(self, messages: List[Dict]) -> str:
+    def _extract_anthropic_user_input(self, messages: list[dict]) -> str:
         """Extract user input from Anthropic messages with support for complex content types"""
         user_input = ""
         try:
@@ -1577,8 +1577,8 @@ class Memori:
         return tokens_used
 
     def _extract_anthropic_metadata(
-        self, kwargs: Dict, response, tokens_used: int
-    ) -> Dict:
+        self, kwargs: dict, response, tokens_used: int
+    ) -> dict:
         """Extract comprehensive metadata from Anthropic request and response"""
         metadata = {
             "integration": "anthropic_auto",
@@ -1873,7 +1873,7 @@ class Memori:
         user_input: str,
         ai_output=None,
         model: str = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Record a conversation.
@@ -2035,7 +2035,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Memory ingestion failed for {chat_id}: {e}")
 
-    async def _get_recent_memories_for_dedup(self) -> List:
+    async def _get_recent_memories_for_dedup(self) -> list:
         """Get recent memories for deduplication check"""
         try:
             from sqlalchemy import text
@@ -2081,7 +2081,7 @@ class Memori:
             logger.error(f"Failed to get recent memories for dedup: {e}")
             return []
 
-    def retrieve_context(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def retrieve_context(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """
         Retrieve relevant context for a query with priority on essential facts
 
@@ -2138,7 +2138,7 @@ class Memori:
             logger.error(f"Context retrieval failed: {e}")
             return []
 
-    def get_conversation_history(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_conversation_history(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent conversation history"""
         try:
             return self.db_manager.get_chat_history(
@@ -2150,7 +2150,7 @@ class Memori:
             logger.error(f"Failed to get conversation history: {e}")
             return []
 
-    def clear_memory(self, memory_type: Optional[str] = None):
+    def clear_memory(self, memory_type: str | None = None):
         """
         Clear memory data
 
@@ -2165,7 +2165,7 @@ class Memori:
         except Exception as e:
             raise MemoriError(f"Failed to clear memory: {e}")
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """Get memory statistics"""
         try:
             return self.db_manager.get_memory_stats(self.namespace)
@@ -2183,7 +2183,7 @@ class Memori:
         """Get current session ID"""
         return self._session_id
 
-    def get_integration_stats(self) -> List[Dict[str, Any]]:
+    def get_integration_stats(self) -> list[dict[str, Any]]:
         """Get statistics from the new interceptor system"""
         try:
             # Get system status first
@@ -2263,9 +2263,9 @@ class Memori:
 
     def update_user_context(
         self,
-        current_projects: Optional[List[str]] = None,
-        relevant_skills: Optional[List[str]] = None,
-        user_preferences: Optional[List[str]] = None,
+        current_projects: list[str] | None = None,
+        relevant_skills: list[str] | None = None,
+        user_preferences: list[str] | None = None,
     ):
         """Update user context for better memory processing"""
         if current_projects is not None:
@@ -2279,7 +2279,7 @@ class Memori:
 
     def search_memories_by_category(
         self, category: str, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories by specific category"""
         try:
             return self.db_manager.search_memories(
@@ -2293,8 +2293,8 @@ class Memori:
             return []
 
     def get_entity_memories(
-        self, entity_value: str, entity_type: Optional[str] = None, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, entity_value: str, entity_type: str | None = None, limit: int = 10
+    ) -> list[dict[str, Any]]:
         """Get memories that contain a specific entity"""
         try:
             # This would use the entity index in the database
@@ -2365,7 +2365,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Failed to stop background analysis: {e}")
 
-    def add(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    def add(self, text: str, metadata: dict[str, Any] | None = None) -> str:
         """
         Add a memory or text to the system.
 
@@ -2392,7 +2392,7 @@ class Memori:
             metadata=metadata or {"type": "manual_memory", "source": "add_method"},
         )
 
-    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """
         Search for memories/conversations based on a query.
 
@@ -2416,7 +2416,7 @@ class Memori:
             logger.error(f"Search failed: {e}")
             return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get memory statistics.
 
@@ -2662,7 +2662,7 @@ class Memori:
             logger.error(f"Failed to add memory to messages: {e}")
             return messages
 
-    def get_essential_conversations(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_essential_conversations(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get essential conversations from short-term memory"""
         try:
             from sqlalchemy import text
@@ -2762,7 +2762,7 @@ class Memori:
 
     # Conversation management methods
 
-    def get_conversation_stats(self) -> Dict[str, Any]:
+    def get_conversation_stats(self) -> dict[str, Any]:
         """Get conversation manager statistics"""
         return self.conversation_manager.get_session_stats()
 

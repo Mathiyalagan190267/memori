@@ -4,7 +4,7 @@ Provider configuration for different LLM providers (OpenAI, Azure, custom)
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -28,35 +28,35 @@ class ProviderConfig:
     """
 
     # Common parameters
-    api_key: Optional[str] = None
-    api_type: Optional[str] = None  # "openai", "azure", or custom
-    base_url: Optional[str] = None  # Custom endpoint URL
-    timeout: Optional[float] = None
-    max_retries: Optional[int] = None
+    api_key: str | None = None
+    api_type: str | None = None  # "openai", "azure", or custom
+    base_url: str | None = None  # Custom endpoint URL
+    timeout: float | None = None
+    max_retries: int | None = None
 
     # Azure-specific parameters
-    azure_endpoint: Optional[str] = None
-    azure_deployment: Optional[str] = None
-    api_version: Optional[str] = None
-    azure_ad_token: Optional[str] = None
+    azure_endpoint: str | None = None
+    azure_deployment: str | None = None
+    api_version: str | None = None
+    azure_ad_token: str | None = None
 
     # OpenAI-specific parameters
-    organization: Optional[str] = None
-    project: Optional[str] = None
+    organization: str | None = None
+    project: str | None = None
 
     # Model configuration
-    model: Optional[str] = None  # User can specify model, defaults to gpt-4o if not set
+    model: str | None = None  # User can specify model, defaults to gpt-4o if not set
 
     # Additional headers for custom providers
-    default_headers: Optional[Dict[str, str]] = None
-    default_query: Optional[Dict[str, Any]] = None
+    default_headers: dict[str, str] | None = None
+    default_query: dict[str, Any] | None = None
 
     # HTTP client configuration
-    http_client: Optional[Any] = None
+    http_client: Any | None = None
 
     @classmethod
     def from_openai(
-        cls, api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+        cls, api_key: str | None = None, model: str | None = None, **kwargs
     ):
         """Create configuration for standard OpenAI"""
         return cls(api_key=api_key, api_type="openai", model=model, **kwargs)
@@ -64,11 +64,11 @@ class ProviderConfig:
     @classmethod
     def from_azure(
         cls,
-        api_key: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
-        api_version: Optional[str] = None,
-        model: Optional[str] = None,
+        api_key: str | None = None,
+        azure_endpoint: str | None = None,
+        azure_deployment: str | None = None,
+        api_version: str | None = None,
+        model: str | None = None,
         **kwargs,
     ):
         """Create configuration for Azure OpenAI"""
@@ -86,8 +86,8 @@ class ProviderConfig:
     def from_custom(
         cls,
         base_url: str,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
+        api_key: str | None = None,
+        model: str | None = None,
         **kwargs,
     ):
         """Create configuration for custom OpenAI-compatible endpoints"""
@@ -95,7 +95,7 @@ class ProviderConfig:
             api_key=api_key, api_type="custom", base_url=base_url, model=model, **kwargs
         )
 
-    def get_openai_client_kwargs(self) -> Dict[str, Any]:
+    def get_openai_client_kwargs(self) -> dict[str, Any]:
         """
         Get kwargs for OpenAI client initialization based on provider type.
 

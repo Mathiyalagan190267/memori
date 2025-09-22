@@ -3,7 +3,7 @@ SQLite-specific search adapter with FTS5 support and proper security
 """
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -25,9 +25,9 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute SQLite FTS5 search with proper validation"""
         try:
             # Validate all parameters
@@ -64,7 +64,7 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
                 query, namespace, category_filter, limit
             )
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create SQLite-specific search indexes"""
         indexes = []
 
@@ -189,9 +189,9 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute LIKE-based fallback search for SQLite"""
         try:
             return self.query_executor.execute_search(

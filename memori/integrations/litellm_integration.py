@@ -16,7 +16,6 @@ Usage:
     response = completion(model="gpt-4o", messages=[...])
 """
 
-from typing import Optional
 
 from loguru import logger
 
@@ -344,7 +343,7 @@ class LiteLLMCallbackManager:
         return self._callback_registered
 
 
-def setup_litellm_callbacks(memori_instance) -> Optional[LiteLLMCallbackManager]:
+def setup_litellm_callbacks(memori_instance) -> LiteLLMCallbackManager | None:
     """
     Convenience function to set up LiteLLM callbacks for a Memori instance.
 

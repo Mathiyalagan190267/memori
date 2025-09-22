@@ -5,7 +5,7 @@ Implements MongoDB-specific CRUD operations for memories
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from loguru import logger
@@ -110,8 +110,8 @@ class MongoDBAdapter:
             logger.warning(f"Failed to create MongoDB indexes: {e}")
 
     def _convert_memory_to_document(
-        self, memory_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, memory_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Convert memory data to MongoDB document format"""
         document = memory_data.copy()
 
@@ -162,7 +162,7 @@ class MongoDBAdapter:
 
         return document
 
-    def _convert_document_to_memory(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_document_to_memory(self, document: dict[str, Any]) -> dict[str, Any]:
         """Convert MongoDB document to memory format"""
         if not document:
             return {}
@@ -197,7 +197,7 @@ class MongoDBAdapter:
         session_id: str,
         namespace: str = "default",
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Store a chat interaction in MongoDB"""
         try:
@@ -235,7 +235,7 @@ class MongoDBAdapter:
         ai_output: str,
         model: str,
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Update an existing chat interaction"""
         try:
@@ -269,9 +269,9 @@ class MongoDBAdapter:
     def get_chat_history(
         self,
         namespace: str = "default",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve chat history from MongoDB"""
         try:
             collection = self.database[self.CHAT_HISTORY_COLLECTION]
@@ -296,7 +296,7 @@ class MongoDBAdapter:
             return []
 
     # Short-term Memory Operations
-    def store_short_term_memory(self, memory_data: Dict[str, Any]) -> str:
+    def store_short_term_memory(self, memory_data: dict[str, Any]) -> str:
         """Store short-term memory in MongoDB"""
         try:
             collection = self.database[self.SHORT_TERM_MEMORY_COLLECTION]
@@ -318,10 +318,10 @@ class MongoDBAdapter:
     def get_short_term_memories(
         self,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         importance_threshold: float = 0.0,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve short-term memories from MongoDB"""
         try:
             collection = self.database[self.SHORT_TERM_MEMORY_COLLECTION]
@@ -360,7 +360,7 @@ class MongoDBAdapter:
             logger.error(f"Failed to retrieve short-term memories: {e}")
             return []
 
-    def update_short_term_memory(self, memory_id: str, updates: Dict[str, Any]) -> bool:
+    def update_short_term_memory(self, memory_id: str, updates: dict[str, Any]) -> bool:
         """Update a short-term memory"""
         try:
             collection = self.database[self.SHORT_TERM_MEMORY_COLLECTION]
@@ -402,7 +402,7 @@ class MongoDBAdapter:
             return False
 
     # Long-term Memory Operations
-    def store_long_term_memory(self, memory_data: Dict[str, Any]) -> str:
+    def store_long_term_memory(self, memory_data: dict[str, Any]) -> str:
         """Store long-term memory in MongoDB"""
         try:
             collection = self.database[self.LONG_TERM_MEMORY_COLLECTION]
@@ -424,11 +424,11 @@ class MongoDBAdapter:
     def get_long_term_memories(
         self,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         importance_threshold: float = 0.0,
-        classification_filter: Optional[List[str]] = None,
+        classification_filter: list[str] | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve long-term memories from MongoDB"""
         try:
             collection = self.database[self.LONG_TERM_MEMORY_COLLECTION]
@@ -463,7 +463,7 @@ class MongoDBAdapter:
             logger.error(f"Failed to retrieve long-term memories: {e}")
             return []
 
-    def update_long_term_memory(self, memory_id: str, updates: Dict[str, Any]) -> bool:
+    def update_long_term_memory(self, memory_id: str, updates: dict[str, Any]) -> bool:
         """Update a long-term memory"""
         try:
             collection = self.database[self.LONG_TERM_MEMORY_COLLECTION]
@@ -509,10 +509,10 @@ class MongoDBAdapter:
         self,
         query: str,
         namespace: str = "default",
-        memory_types: Optional[List[str]] = None,
-        category_filter: Optional[List[str]] = None,
+        memory_types: list[str] | None = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories using MongoDB text search"""
         try:
             results = []
@@ -575,9 +575,9 @@ class MongoDBAdapter:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Fallback search using regex when text search fails"""
         try:
             results = []
@@ -642,8 +642,8 @@ class MongoDBAdapter:
 
     # Batch Operations
     def batch_store_memories(
-        self, memories: List[Dict[str, Any]], memory_type: str = "short_term"
-    ) -> List[str]:
+        self, memories: list[dict[str, Any]], memory_type: str = "short_term"
+    ) -> list[str]:
         """Store multiple memories in batch"""
         try:
             if memory_type == "short_term":
@@ -701,7 +701,7 @@ class MongoDBAdapter:
             logger.error(f"Failed to cleanup expired memories: {e}")
             return 0
 
-    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+    def get_memory_stats(self, namespace: str = "default") -> dict[str, Any]:
         """Get memory storage statistics"""
         try:
             stats = {
