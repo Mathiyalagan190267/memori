@@ -28,9 +28,27 @@ class ConsciouscAgent:
         self._database_type = None  # Will be detected from db_manager
 
     def _detect_database_type(self, db_manager):
-        """Detect database type from db_manager"""
+        """Detect database type from db_manager with fallback detection"""
         if self._database_type is None:
-            self._database_type = getattr(db_manager, 'database_type', 'sql')
+            # Try multiple detection methods
+            if hasattr(db_manager, 'database_type'):
+                self._database_type = db_manager.database_type
+            elif hasattr(db_manager, '__class__'):
+                class_name = db_manager.__class__.__name__
+                if 'MongoDB' in class_name:
+                    self._database_type = 'mongodb'
+                elif 'SQLAlchemy' in class_name:
+                    self._database_type = 'sql'
+                else:
+                    # Fallback detection by checking for MongoDB-specific methods
+                    if hasattr(db_manager, '_get_collection'):
+                        self._database_type = 'mongodb'
+                    else:
+                        self._database_type = 'sql'
+            else:
+                # Ultimate fallback
+                self._database_type = 'sql'
+
             logger.debug(f"ConsciouscAgent: Detected database type: {self._database_type}")
         return self._database_type
 

@@ -320,25 +320,41 @@ class Memori:
                 )
 
     def _create_database_manager(self, database_connect: str, template: str, schema_init: bool):
-        """Create appropriate database manager based on connection string"""
+        """Create appropriate database manager based on connection string with fallback"""
         try:
             # Detect MongoDB connection strings
             if self._is_mongodb_connection(database_connect):
-                logger.info("Detected MongoDB connection string - using MongoDB manager")
+                logger.info("Detected MongoDB connection string - attempting MongoDB manager")
                 try:
                     from ..database.mongodb_manager import MongoDBDatabaseManager
-                    return MongoDBDatabaseManager(database_connect, template, schema_init)
+                    # Test MongoDB connection before proceeding
+                    manager = MongoDBDatabaseManager(database_connect, template, schema_init)
+                    # Verify connection works
+                    _ = manager._get_client()
+                    logger.info("MongoDB manager initialized successfully")
+                    return manager
                 except ImportError as e:
-                    raise DatabaseError(
-                        "MongoDB support requires pymongo. Install with: pip install pymongo"
-                    ) from e
+                    logger.error("MongoDB support requires pymongo. Install with: pip install pymongo")
+                    logger.info("Falling back to SQLite for compatibility")
+                    return self._create_fallback_sqlite_manager(template, schema_init)
+                except Exception as e:
+                    logger.error(f"MongoDB connection failed: {e}")
+                    logger.info("Falling back to SQLite for compatibility")
+                    return self._create_fallback_sqlite_manager(template, schema_init)
             else:
                 logger.info("Detected SQL connection string - using SQLAlchemy manager")
                 return SQLAlchemyDatabaseManager(database_connect, template, schema_init)
-                
+
         except Exception as e:
             logger.error(f"Failed to create database manager: {e}")
-            raise DatabaseError(f"Failed to initialize database manager: {e}")
+            logger.info("Creating fallback SQLite manager")
+            return self._create_fallback_sqlite_manager(template, schema_init)
+
+    def _create_fallback_sqlite_manager(self, template: str, schema_init: bool):
+        """Create fallback SQLite manager when other options fail"""
+        fallback_connect = "sqlite:///memori_fallback.db"
+        logger.warning(f"Using fallback SQLite database: {fallback_connect}")
+        return SQLAlchemyDatabaseManager(fallback_connect, template, schema_init)
 
     def _is_mongodb_connection(self, database_connect: str) -> bool:
         """Detect if connection string is for MongoDB"""
@@ -1641,10 +1657,22 @@ class Memori:
             import threading
 
             def run_memory_processing():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
+                """Run memory processing with improved event loop management"""
+                new_loop = None
                 try:
+                    # Check if we're already in an async context
+                    try:
+                        current_loop = asyncio.get_running_loop()
+                        logger.debug("Found existing event loop, creating new one for memory processing")
+                    except RuntimeError:
+                        # No running loop, safe to create new one
+                        logger.debug("No existing event loop found, creating new one")
+
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+
                     logger.debug(f"Starting memory processing for {chat_id} (attempt {retry_count + 1})")
+
                     # Add timeout to prevent hanging
                     new_loop.run_until_complete(
                         asyncio.wait_for(
@@ -1655,6 +1683,7 @@ class Memori:
                         )
                     )
                     logger.debug(f"Memory processing completed successfully for {chat_id}")
+
                 except asyncio.TimeoutError as e:
                     logger.error(f"Memory processing timed out for {chat_id} (attempt {retry_count + 1}): {e}")
                     if retry_count < max_retries:
@@ -1664,7 +1693,7 @@ class Memori:
                         time.sleep(2)  # Wait 2 seconds before retry
                         self._process_memory_sync(chat_id, user_input, ai_output, model, retry_count + 1)
                 except Exception as e:
-                    logger.error(f"Synchronous memory processing failed for {chat_id} (attempt {retry_count + 1}): {e}")
+                    logger.error(f"Memory processing failed for {chat_id} (attempt {retry_count + 1}): {e}")
                     import traceback
                     logger.error(f"Full error traceback: {traceback.format_exc()}")
                     if retry_count < max_retries:
@@ -1674,8 +1703,24 @@ class Memori:
                         time.sleep(2)  # Wait 2 seconds before retry
                         self._process_memory_sync(chat_id, user_input, ai_output, model, retry_count + 1)
                 finally:
-                    new_loop.close()
-                    logger.debug(f"Event loop closed for {chat_id}")
+                    if new_loop and not new_loop.is_closed():
+                        # Clean up pending tasks
+                        pending = asyncio.all_tasks(new_loop)
+                        if pending:
+                            logger.debug(f"Cancelling {len(pending)} pending tasks")
+                            for task in pending:
+                                task.cancel()
+                            # Wait for cancellation to complete
+                            new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+                        new_loop.close()
+                        logger.debug(f"Event loop closed for {chat_id}")
+
+                    # Reset event loop policy to prevent conflicts
+                    try:
+                        asyncio.set_event_loop(None)
+                    except:
+                        pass
 
             # Run in background thread to avoid blocking
             thread = threading.Thread(target=run_memory_processing, daemon=True)

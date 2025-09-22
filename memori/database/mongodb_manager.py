@@ -854,21 +854,22 @@ class MongoDBDatabaseManager:
         category_filter: Optional[List[str]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Search memories using MongoDB text search only (no fallbacks)"""
+        """Search memories using MongoDB text search with SQL-compatible interface"""
         try:
-            logger.info(f"Starting MongoDB text search for query: '{query}' in namespace: '{namespace}'")
+            logger.debug(f"MongoDB search_memories called: query='{query}', namespace='{namespace}', limit={limit}")
 
-            # Clean the query to remove common prefixes that interfere with search
+            # Handle empty queries consistently with SQL
+            if not query or not query.strip():
+                logger.debug("Empty query provided, returning empty results for consistency")
+                return []
+
+            # Clean query (remove common problematic prefixes)
             cleaned_query = query.strip()
-
-            # Remove "User query:" prefix if present (this was causing search failures)
             if cleaned_query.lower().startswith("user query:"):
-                cleaned_query = cleaned_query[11:].strip()  # Remove "User query:" and any following whitespace
+                cleaned_query = cleaned_query[11:].strip()
                 logger.debug(f"Cleaned query from '{query}' to '{cleaned_query}'")
 
-            # Return empty results for empty queries
             if not cleaned_query:
-                logger.debug("Empty query after cleaning, returning empty results")
                 return []
 
             results = []
@@ -877,13 +878,12 @@ class MongoDBDatabaseManager:
                 (self.LONG_TERM_MEMORY_COLLECTION, 'long_term')
             ]
 
-            # Search each collection using MongoDB text search
+            # Search each collection
             for collection_name, memory_type in collections_to_search:
                 collection = self._get_collection(collection_name)
-                logger.debug(f"Searching {memory_type} memories in collection: {collection_name}")
 
                 try:
-                    # Build base search filter with text search using cleaned query
+                    # Build search filter
                     search_filter = {
                         '$text': {'$search': cleaned_query},
                         'namespace': namespace
@@ -892,15 +892,13 @@ class MongoDBDatabaseManager:
                     # Add category filter if specified
                     if category_filter:
                         search_filter['category_primary'] = {'$in': category_filter}
-                        logger.debug(f"Applied category filter: {category_filter}")
 
                     # For short-term memories, exclude expired ones
                     if memory_type == 'short_term':
                         current_time = datetime.now(timezone.utc)
-                        # Combine text search filter with expiration filter
                         search_filter = {
                             '$and': [
-                                {'$text': {'$search': cleaned_query}},  # Use cleaned query
+                                {'$text': {'$search': cleaned_query}},
                                 {'namespace': namespace},
                                 {
                                     '$or': [
@@ -913,11 +911,8 @@ class MongoDBDatabaseManager:
                         }
                         if category_filter:
                             search_filter['$and'].append({'category_primary': {'$in': category_filter}})
-                        logger.debug("Applied expiration filter for short-term memories")
 
-                    logger.debug(f"Executing MongoDB text search with cleaned query '{cleaned_query}' and filter: {search_filter}")
-
-                    # Execute MongoDB text search with text score projection
+                    # Execute search with standardized projection
                     cursor = collection.find(
                         search_filter,
                         {'score': {'$meta': 'textScore'}}
@@ -927,48 +922,41 @@ class MongoDBDatabaseManager:
                         ('created_at', -1)
                     ]).limit(limit)
 
-                    collection_results = []
                     for document in cursor:
                         memory = self._convert_to_dict(document)
+
+                        # Standardize fields for SQL compatibility
                         memory['memory_type'] = memory_type
                         memory['search_strategy'] = 'mongodb_text'
-                        # Preserve text search score
-                        if 'score' in document:
-                            memory['text_score'] = document['score']
-                        collection_results.append(memory)
+                        memory['search_score'] = document.get('score', 0.8)  # MongoDB text score
+
+                        # Ensure all required fields are present
+                        if 'importance_score' not in memory:
+                            memory['importance_score'] = 0.5
+                        if 'created_at' not in memory:
+                            memory['created_at'] = datetime.now(timezone.utc).isoformat()
+
                         results.append(memory)
 
-                    logger.info(f"MongoDB text search found {len(collection_results)} results in {memory_type} collection")
-
-                    if collection_results:
-                        logger.debug(f"Top result from {memory_type}: score={collection_results[0].get('text_score', 'N/A')}, content='{collection_results[0].get('searchable_content', '')[:50]}...'")
-
                 except Exception as search_error:
-                    logger.error(f"MongoDB text search failed for {collection_name}: {search_error}")
-                    logger.error(f"This indicates a problem with text indexes or query structure")
-                    # Don't fall back - let the error surface so we can fix the root cause
+                    logger.error(f"MongoDB search failed for {collection_name}: {search_error}")
                     continue
 
-            # Sort all results by text search score first, then importance
+            # Sort results by search score for consistency
             results.sort(
                 key=lambda x: (
-                    x.get('text_score', 0),
+                    x.get('search_score', 0),
                     x.get('importance_score', 0)
                 ),
                 reverse=True
             )
 
-            logger.info(f"MongoDB text search completed: {len(results)} total results for query: '{query}'")
-
-            if results:
-                logger.debug(f"Best match: score={results[0].get('text_score', 'N/A')}, content='{results[0].get('searchable_content', '')[:100]}...'")
-            else:
-                logger.debug(f"MongoDB text search found no results for query: '{query}' in namespace: '{namespace}'")
-
+            logger.debug(f"MongoDB search returned {len(results)} results")
             return results[:limit]
 
         except Exception as e:
-            logger.error(f"MongoDB text search failed: {e}", exc_info=True)
+            logger.error(f"MongoDB search_memories failed: {e}")
+            # Return empty list to maintain compatibility with SQL manager
             return []
     
     
