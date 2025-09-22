@@ -532,7 +532,10 @@ class MongoDBAdapter:
                 collection = self.database[collection_name]
 
                 # Build search filter
-                search_filter: dict[str, Any] = {"$text": {"$search": query}, "namespace": namespace}
+                search_filter: dict[str, Any] = {
+                    "$text": {"$search": query},
+                    "namespace": namespace,
+                }
 
                 if category_filter:
                     search_filter["category_primary"] = {"$in": category_filter}
