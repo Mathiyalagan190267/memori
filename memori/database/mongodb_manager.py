@@ -952,7 +952,7 @@ class MongoDBDatabaseManager:
 
                 try:
                     # Build search filter
-                    search_filter = {
+                    search_filter: dict[str, Any] = {
                         "$text": {"$search": cleaned_query},
                         "namespace": namespace,
                     }

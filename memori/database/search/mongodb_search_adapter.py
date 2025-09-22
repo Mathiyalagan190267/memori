@@ -105,7 +105,7 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         for collection, memory_type in collections:
             try:
                 # Build search filter
-                search_filter = {"$text": {"$search": query}, "namespace": namespace}
+                search_filter: dict[str, Any] = {"$text": {"$search": query}, "namespace": namespace}
 
                 if category_filter:
                     search_filter["category_primary"] = {"$in": category_filter}

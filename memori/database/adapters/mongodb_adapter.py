@@ -327,7 +327,7 @@ class MongoDBAdapter:
             collection = self.database[self.SHORT_TERM_MEMORY_COLLECTION]
 
             # Build filter
-            filter_doc = {
+            filter_doc: dict[str, Any] = {
                 "namespace": namespace,
                 "importance_score": {"$gte": importance_threshold},
             }
@@ -532,7 +532,7 @@ class MongoDBAdapter:
                 collection = self.database[collection_name]
 
                 # Build search filter
-                search_filter = {"$text": {"$search": query}, "namespace": namespace}
+                search_filter: dict[str, Any] = {"$text": {"$search": query}, "namespace": namespace}
 
                 if category_filter:
                     search_filter["category_primary"] = {"$in": category_filter}
@@ -593,7 +593,7 @@ class MongoDBAdapter:
                 collection = self.database[collection_name]
 
                 # Build search filter using regex
-                search_filter = {
+                search_filter: dict[str, Any] = {
                     "$or": [
                         {"searchable_content": regex_pattern},
                         {"summary": regex_pattern},
