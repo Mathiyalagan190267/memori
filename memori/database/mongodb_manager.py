@@ -1152,9 +1152,7 @@ class MongoDBDatabaseManager:
             logger.error(f"Failed to get memory stats: {e}")
             return {"error": str(e)}
 
-    def clear_memory(
-        self, namespace: str = "default", memory_type: str | None = None
-    ):
+    def clear_memory(self, namespace: str = "default", memory_type: str | None = None):
         """Clear memory data"""
         try:
             if memory_type == "short_term":

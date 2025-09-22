@@ -95,9 +95,7 @@ class InputValidator:
         return sanitized_namespace
 
     @classmethod
-    def validate_category_filter(
-        cls, category_filter: list[str] | None
-    ) -> list[str]:
+    def validate_category_filter(cls, category_filter: list[str] | None) -> list[str]:
         """Validate and sanitize category filter list"""
         if category_filter is None:
             return []

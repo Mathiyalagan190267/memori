@@ -16,7 +16,6 @@ Usage:
     response = completion(model="gpt-4o", messages=[...])
 """
 
-
 from loguru import logger
 
 try:

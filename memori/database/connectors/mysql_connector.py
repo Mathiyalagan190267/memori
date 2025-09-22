@@ -172,9 +172,7 @@ class MySQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute delete: {e}")
 
-    def execute_transaction(
-        self, queries: list[tuple[str, list[Any] | None]]
-    ) -> bool:
+    def execute_transaction(self, queries: list[tuple[str, list[Any] | None]]) -> bool:
         """Execute multiple queries in a transaction"""
         try:
             with self.get_connection() as conn:

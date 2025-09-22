@@ -2,7 +2,6 @@
 Chat history database queries
 """
 
-
 from .base_queries import BaseQueries
 
 

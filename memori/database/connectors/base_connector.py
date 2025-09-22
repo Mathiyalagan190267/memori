@@ -66,9 +66,7 @@ class BaseDatabaseConnector(ABC):
         pass
 
     @abstractmethod
-    def execute_transaction(
-        self, queries: list[tuple[str, list[Any] | None]]
-    ) -> bool:
+    def execute_transaction(self, queries: list[tuple[str, list[Any] | None]]) -> bool:
         """Execute multiple queries in a transaction"""
         pass
 

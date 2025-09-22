@@ -951,9 +951,7 @@ class DatabaseManager:
 
             return stats
 
-    def clear_memory(
-        self, namespace: str = "default", memory_type: str | None = None
-    ):
+    def clear_memory(self, namespace: str = "default", memory_type: str | None = None):
         """Clear memory data with entity cleanup"""
         with self._get_connection() as conn:
             cursor = conn.cursor()

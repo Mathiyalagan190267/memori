@@ -727,9 +727,7 @@ class SQLAlchemyDatabaseManager:
             except SQLAlchemyError as e:
                 raise DatabaseError(f"Failed to get memory stats: {e}")
 
-    def clear_memory(
-        self, namespace: str = "default", memory_type: str | None = None
-    ):
+    def clear_memory(self, namespace: str = "default", memory_type: str | None = None):
         """Clear memory data"""
         with self.SessionLocal() as session:
             try:

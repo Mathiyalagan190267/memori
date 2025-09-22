@@ -230,9 +230,7 @@ class FileUtils:
         return path
 
     @staticmethod
-    def safe_read_text(
-        file_path: str | Path, encoding: str = "utf-8"
-    ) -> str | None:
+    def safe_read_text(file_path: str | Path, encoding: str = "utf-8") -> str | None:
         """Safely read text file"""
         try:
             return Path(file_path).read_text(encoding=encoding)

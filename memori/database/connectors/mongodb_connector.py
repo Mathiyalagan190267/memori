@@ -248,9 +248,7 @@ class MongoDBConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute MongoDB delete: {e}")
 
-    def execute_transaction(
-        self, queries: list[tuple[str, list[Any] | None]]
-    ) -> bool:
+    def execute_transaction(self, queries: list[tuple[str, list[Any] | None]]) -> bool:
         """Execute multiple operations in a MongoDB transaction"""
         try:
             client = self.get_connection()

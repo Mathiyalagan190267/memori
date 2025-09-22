@@ -3,7 +3,6 @@ MySQL schema generator for Memori v2.0
 Converts SQLite schema to MySQL-compatible schema with FULLTEXT search
 """
 
-
 from ..connectors.base_connector import BaseSchemaGenerator, DatabaseType
 
 

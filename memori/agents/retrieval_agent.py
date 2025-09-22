@@ -106,9 +106,7 @@ Be strategic and comprehensive in your search planning."""
             )
         return self._database_type
 
-    def plan_search(
-        self, query: str, context: str | None = None
-    ) -> MemorySearchQuery:
+    def plan_search(self, query: str, context: str | None = None) -> MemorySearchQuery:
         """
         Plan search strategy for a user query using OpenAI Structured Outputs with caching
 

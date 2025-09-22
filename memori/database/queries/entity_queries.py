@@ -2,7 +2,6 @@
 Entity and relationship database queries
 """
 
-
 from .base_queries import BaseQueries
 
 
