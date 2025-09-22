@@ -25,6 +25,7 @@ class DatabaseType(str, Enum):
     SQLITE = "sqlite"
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
+    MONGODB = "mongodb"
 
 
 class RetentionPolicy(str, Enum):
@@ -63,7 +64,7 @@ class DatabaseSettings(BaseModel):
             raise ValueError("Connection string cannot be empty")
 
         # Basic validation for supported protocols
-        valid_prefixes = ["sqlite://", "sqlite:///", "postgresql://", "mysql://"]
+        valid_prefixes = ["sqlite://", "sqlite:///", "postgresql://", "mysql://", "mongodb://"]
         if not any(v.startswith(prefix) for prefix in valid_prefixes):
             raise ValueError(f"Unsupported database type in connection string: {v}")
 

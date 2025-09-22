@@ -94,6 +94,16 @@ Be strategic and comprehensive in your search planning."""
         # Background processing
         self._background_executor = None
 
+        # Database type detection for unified search
+        self._database_type = None
+
+    def _detect_database_type(self, db_manager):
+        """Detect database type from db_manager"""
+        if self._database_type is None:
+            self._database_type = getattr(db_manager, 'database_type', 'sql')
+            logger.debug(f"MemorySearchEngine: Detected database type: {self._database_type}")
+        return self._database_type
+
     def plan_search(
         self, query: str, context: Optional[str] = None
     ) -> MemorySearchQuery:
@@ -188,7 +198,7 @@ Be strategic and comprehensive in your search planning."""
 
         Args:
             query: User's search query
-            db_manager: Database manager instance
+            db_manager: Database manager instance (SQL or MongoDB)
             namespace: Memory namespace
             limit: Maximum results to return
 
@@ -196,27 +206,42 @@ Be strategic and comprehensive in your search planning."""
             List of relevant memory items with search metadata
         """
         try:
+            # Detect database type for optimal search strategy
+            db_type = self._detect_database_type(db_manager)
+
             # Plan the search
             search_plan = self.plan_search(query)
             logger.debug(
-                f"Search plan for '{query}': strategies={search_plan.search_strategy}, entities={search_plan.entity_filters}"
+                f"Search plan for '{query}': strategies={search_plan.search_strategy}, entities={search_plan.entity_filters}, db_type={db_type}"
             )
 
             all_results = []
             seen_memory_ids = set()
 
-            # Execute keyword search (primary strategy)
-            if (
-                search_plan.entity_filters
-                or "keyword_search" in search_plan.search_strategy
-            ):
-                logger.debug(
-                    f"Executing keyword search for: {search_plan.entity_filters}"
-                )
+            # For MongoDB and SQL, use the unified search_memories method as primary strategy
+            # This ensures we use the database's native search capabilities
+            logger.debug(f"Executing unified database search using {db_type} manager")
+            primary_results = db_manager.search_memories(
+                query=search_plan.query_text or query,
+                namespace=namespace,
+                limit=limit
+            )
+            logger.debug(f"Primary database search returned {len(primary_results)} results")
+
+            # Process primary results and add search metadata
+            for result in primary_results:
+                if isinstance(result, dict) and result.get("memory_id") not in seen_memory_ids:
+                    seen_memory_ids.add(result["memory_id"])
+                    result["search_strategy"] = f"{db_type}_unified_search"
+                    result["search_reasoning"] = f"Direct {db_type} database search"
+                    all_results.append(result)
+
+            # If we have room for more results and specific entity filters, try keyword search
+            if len(all_results) < limit and search_plan.entity_filters:
+                logger.debug(f"Adding targeted keyword search for: {search_plan.entity_filters}")
                 keyword_results = self._execute_keyword_search(
-                    search_plan, db_manager, namespace, limit
+                    search_plan, db_manager, namespace, limit - len(all_results)
                 )
-                logger.debug(f"Keyword search returned {len(keyword_results)} results")
 
                 for result in keyword_results:
                     if (
@@ -230,19 +255,16 @@ Be strategic and comprehensive in your search planning."""
                         )
                         all_results.append(result)
 
-            # Execute category-based search
-            if (
+            # If we have room for more results, try category-based search
+            if len(all_results) < limit and (
                 search_plan.category_filters
                 or "category_filter" in search_plan.search_strategy
             ):
                 logger.debug(
-                    f"Executing category search for: {[c.value for c in search_plan.category_filters]}"
+                    f"Adding category search for: {[c.value for c in search_plan.category_filters]}"
                 )
                 category_results = self._execute_category_search(
                     search_plan, db_manager, namespace, limit - len(all_results)
-                )
-                logger.debug(
-                    f"Category search returned {len(category_results)} results"
                 )
 
                 for result in category_results:
@@ -257,19 +279,16 @@ Be strategic and comprehensive in your search planning."""
                         )
                         all_results.append(result)
 
-            # Execute importance-based search
-            if (
+            # If we have room for more results, try importance-based search
+            if len(all_results) < limit and (
                 search_plan.min_importance > 0.0
                 or "importance_filter" in search_plan.search_strategy
             ):
                 logger.debug(
-                    f"Executing importance search with min_importance: {search_plan.min_importance}"
+                    f"Adding importance search with min_importance: {search_plan.min_importance}"
                 )
                 importance_results = self._execute_importance_search(
                     search_plan, db_manager, namespace, limit - len(all_results)
-                )
-                logger.debug(
-                    f"Importance search returned {len(importance_results)} results"
                 )
 
                 for result in importance_results:
@@ -282,22 +301,6 @@ Be strategic and comprehensive in your search planning."""
                         result["search_reasoning"] = (
                             f"High importance (≥{search_plan.min_importance})"
                         )
-                        all_results.append(result)
-
-            # If no specific strategies worked, do a general search
-            if not all_results:
-                logger.debug(
-                    "No results from specific strategies, executing general search"
-                )
-                general_results = db_manager.search_memories(
-                    query=search_plan.query_text, namespace=namespace, limit=limit
-                )
-                logger.debug(f"General search returned {len(general_results)} results")
-
-                for result in general_results:
-                    if isinstance(result, dict):
-                        result["search_strategy"] = "general_search"
-                        result["search_reasoning"] = "General content search"
                         all_results.append(result)
 
             # Filter out any non-dictionary results before processing

@@ -24,6 +24,9 @@ from ..utils.transaction_manager import TransactionManager, TransactionOperation
 class DatabaseManager:
     """Manages Pydantic-based memory storage with streamlined schema and FTS search"""
 
+    # Database type identifier for database-agnostic code
+    database_type = "sql"
+
     def __init__(self, database_connect: str, template: str = "basic"):
         self.database_connect = database_connect
         self.template = template

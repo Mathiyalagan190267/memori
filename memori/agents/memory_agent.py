@@ -60,6 +60,16 @@ class MemoryAgent:
         # Determine if we're using a local/custom endpoint that might not support structured outputs
         self._supports_structured_outputs = self._detect_structured_output_support()
 
+        # Database type detection for unified processing
+        self._database_type = None
+
+    def _detect_database_type(self, db_manager):
+        """Detect database type from db_manager"""
+        if self._database_type is None:
+            self._database_type = getattr(db_manager, 'database_type', 'sql')
+            logger.debug(f"MemoryAgent: Detected database type: {self._database_type}")
+        return self._database_type
+
     SYSTEM_PROMPT = """You are an advanced Memory Processing Agent responsible for analyzing conversations and extracting structured information with intelligent classification and conscious context detection.
 
 Your primary functions:

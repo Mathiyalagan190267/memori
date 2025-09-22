@@ -20,6 +20,7 @@ class DatabaseConnectionUtils:
         "postgresql": "postgres",
         "mysql": "mysql",
         "sqlite": None,  # SQLite doesn't need default DB
+        "mongodb": None,  # MongoDB doesn't need default DB for connection
     }
 
     @classmethod
@@ -91,7 +92,7 @@ class DatabaseConnectionUtils:
                 "default_url": default_url,
                 "original_url": connection_string,
                 "needs_creation": engine
-                in ["postgresql", "mysql"],  # SQLite auto-creates
+                in ["postgresql", "mysql"],  # SQLite and MongoDB auto-create
             }
 
         except Exception as e:
