@@ -4,7 +4,7 @@ Centralized logging configuration for Memoriai
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -16,7 +16,7 @@ class LoggingManager:
     """Centralized logging management"""
 
     _initialized = False
-    _current_config: Optional[LoggingSettings] = None
+    _current_config: LoggingSettings | None = None
 
     @classmethod
     def setup_logging(cls, settings: LoggingSettings, verbose: bool = False) -> None:
@@ -107,7 +107,7 @@ class LoggingManager:
             logger.error(f"Failed to update log level: {e}")
 
     @classmethod
-    def add_custom_handler(cls, handler_config: Dict[str, Any]) -> None:
+    def add_custom_handler(cls, handler_config: dict[str, Any]) -> None:
         """Add a custom logging handler"""
         try:
             logger.add(**handler_config)
@@ -121,7 +121,7 @@ class LoggingManager:
         return cls._initialized
 
     @classmethod
-    def get_current_config(cls) -> Optional[LoggingSettings]:
+    def get_current_config(cls) -> LoggingSettings | None:
         """Get current logging configuration"""
         return cls._current_config
 

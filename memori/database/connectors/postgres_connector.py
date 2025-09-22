@@ -2,7 +2,7 @@
 PostgreSQL connector for Memori v1.0
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -44,7 +44,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         """Detect database type from connection config"""
         return DatabaseType.POSTGRESQL
 
-    def _build_connection_string(self, config: Dict[str, Any]) -> str:
+    def _build_connection_string(self, config: dict[str, Any]) -> str:
         """Build PostgreSQL connection string from config dict"""
         try:
             user = config.get("user", "postgres")
@@ -156,8 +156,8 @@ class PostgreSQLConnector(BaseDatabaseConnector):
             raise DatabaseError(f"Failed to connect to PostgreSQL database: {e}")
 
     def execute_query(
-        self, query: str, params: Optional[List] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a query and return results"""
         try:
             with self.get_connection() as conn:
@@ -177,7 +177,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute query: {e}")
 
-    def execute_insert(self, query: str, params: Optional[List] = None) -> str:
+    def execute_insert(self, query: str, params: list | None = None) -> str:
         """Execute an insert query and return the inserted row ID"""
         try:
             with self.get_connection() as conn:
@@ -206,7 +206,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute insert: {e}")
 
-    def execute_update(self, query: str, params: Optional[List] = None) -> int:
+    def execute_update(self, query: str, params: list | None = None) -> int:
         """Execute an update query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -222,7 +222,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute update: {e}")
 
-    def execute_delete(self, query: str, params: Optional[List] = None) -> int:
+    def execute_delete(self, query: str, params: list | None = None) -> int:
         """Execute a delete query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -238,7 +238,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute delete: {e}")
 
-    def execute_transaction(self, queries: List[tuple]) -> bool:
+    def execute_transaction(self, queries: list[tuple]) -> bool:
         """Execute multiple queries in a transaction"""
         try:
             with self.get_connection() as conn:
@@ -268,7 +268,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
             logger.error(f"Connection test failed: {e}")
             return False
 
-    def initialize_schema(self, schema_sql: Optional[str] = None):
+    def initialize_schema(self, schema_sql: str | None = None):
         """Initialize PostgreSQL database schema"""
         try:
             if not schema_sql:
@@ -326,7 +326,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
             return False
 
     def create_full_text_index(
-        self, table: str, columns: List[str], index_name: str
+        self, table: str, columns: list[str], index_name: str
     ) -> str:
         """Create PostgreSQL GIN index for full-text search"""
         # Validate inputs
@@ -344,7 +344,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
         tsvector_expr = " || ' ' || ".join(columns)
         return f"CREATE INDEX {index_name} ON {table} USING gin(to_tsvector('english', {tsvector_expr}))"
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get PostgreSQL database information and capabilities"""
         try:
             with self.get_connection() as conn:
@@ -392,7 +392,7 @@ class PostgreSQLConnector(BaseDatabaseConnector):
                 "error": str(e),
             }
 
-    def _split_postgresql_statements(self, schema_sql: str) -> List[str]:
+    def _split_postgresql_statements(self, schema_sql: str) -> list[str]:
         """Split SQL schema into individual statements handling PostgreSQL syntax"""
         statements = []
         current_statement = []

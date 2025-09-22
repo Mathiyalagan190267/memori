@@ -3,11 +3,12 @@ Conscious Agent for User Context Management
 
 This agent copies conscious-info labeled memories from long-term memory
 directly to short-term memory for immediate context availability.
+
+Supports both SQL and MongoDB database backends.
 """
 
 import json
 from datetime import datetime
-from typing import List
 
 from loguru import logger
 
@@ -23,6 +24,34 @@ class ConsciouscAgent:
     def __init__(self):
         """Initialize the conscious agent"""
         self.context_initialized = False
+        self._database_type = None  # Will be detected from db_manager
+
+    def _detect_database_type(self, db_manager):
+        """Detect database type from db_manager with fallback detection"""
+        if self._database_type is None:
+            # Try multiple detection methods
+            if hasattr(db_manager, "database_type"):
+                self._database_type = db_manager.database_type
+            elif hasattr(db_manager, "__class__"):
+                class_name = db_manager.__class__.__name__
+                if "MongoDB" in class_name:
+                    self._database_type = "mongodb"
+                elif "SQLAlchemy" in class_name:
+                    self._database_type = "sql"
+                else:
+                    # Fallback detection by checking for MongoDB-specific methods
+                    if hasattr(db_manager, "_get_collection"):
+                        self._database_type = "mongodb"
+                    else:
+                        self._database_type = "sql"
+            else:
+                # Ultimate fallback
+                self._database_type = "sql"
+
+            logger.debug(
+                f"ConsciouscAgent: Detected database type: {self._database_type}"
+            )
+        return self._database_type
 
     async def run_conscious_ingest(
         self, db_manager, namespace: str = "default"
@@ -34,13 +63,15 @@ class ConsciouscAgent:
         directly to short-term memory as permanent context
 
         Args:
-            db_manager: Database manager instance
+            db_manager: Database manager instance (SQL or MongoDB)
             namespace: Memory namespace
 
         Returns:
             True if memories were copied, False otherwise
         """
         try:
+            db_type = self._detect_database_type(db_manager)
+
             # Get all conscious-info labeled memories
             conscious_memories = await self._get_conscious_memories(
                 db_manager, namespace
@@ -52,17 +83,25 @@ class ConsciouscAgent:
 
             # Copy each conscious-info memory directly to short-term memory
             copied_count = 0
-            for memory_row in conscious_memories:
+            for memory_data in conscious_memories:
                 success = await self._copy_memory_to_short_term(
-                    db_manager, namespace, memory_row
+                    db_manager, namespace, memory_data
                 )
                 if success:
                     copied_count += 1
 
             # Mark memories as processed
-            memory_ids = [
-                row[0] for row in conscious_memories
-            ]  # memory_id is first column
+            if db_type == "mongodb":
+                memory_ids = [
+                    mem.get("memory_id")
+                    for mem in conscious_memories
+                    if isinstance(mem, dict) and mem.get("memory_id")
+                ]
+            else:
+                memory_ids = [
+                    row[0] for row in conscious_memories
+                ]  # memory_id is first column for SQL
+
             await self._mark_memories_processed(db_manager, memory_ids, namespace)
 
             self.context_initialized = True
@@ -92,32 +131,45 @@ class ConsciouscAgent:
             True if memories were processed, False otherwise
         """
         try:
-            from sqlalchemy import text
+            db_type = self._detect_database_type(db_manager)
 
-            with db_manager._get_connection() as connection:
-                # Get ALL conscious-info labeled memories from long-term memory
-                cursor = connection.execute(
-                    text(
-                        """SELECT memory_id, processed_data, summary, searchable_content,
-                              importance_score, created_at
-                       FROM long_term_memory
-                       WHERE namespace = :namespace AND classification = 'conscious-info'
-                       ORDER BY importance_score DESC, created_at DESC"""
-                    ),
-                    {"namespace": namespace},
+            if db_type == "mongodb":
+                # Use MongoDB-specific method to get ALL conscious memories
+                existing_conscious_memories = db_manager.get_conscious_memories(
+                    namespace=namespace
                 )
-                existing_conscious_memories = cursor.fetchall()
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with db_manager._get_connection() as connection:
+                    # Get ALL conscious-info labeled memories from long-term memory
+                    cursor = connection.execute(
+                        text(
+                            """SELECT memory_id, processed_data, summary, searchable_content,
+                                  importance_score, created_at
+                           FROM long_term_memory
+                           WHERE namespace = :namespace AND classification = 'conscious-info'
+                           ORDER BY importance_score DESC, created_at DESC"""
+                        ),
+                        {"namespace": namespace},
+                    )
+                    existing_conscious_memories = cursor.fetchall()
 
             if not existing_conscious_memories:
-                logger.debug(
+                logger.info(
                     "ConsciouscAgent: No existing conscious-info memories found for initialization"
                 )
                 return False
 
+            logger.info(
+                f"ConsciouscAgent: Found {len(existing_conscious_memories)} conscious-info memories to initialize"
+            )
+
             copied_count = 0
-            for memory_row in existing_conscious_memories:
+            for memory_data in existing_conscious_memories:
                 success = await self._copy_memory_to_short_term(
-                    db_manager, namespace, memory_row
+                    db_manager, namespace, memory_data
                 )
                 if success:
                     copied_count += 1
@@ -128,7 +180,7 @@ class ConsciouscAgent:
                 )
                 return True
             else:
-                logger.debug(
+                logger.info(
                     "ConsciouscAgent: No new conscious memories to initialize (all were duplicates)"
                 )
                 return False
@@ -171,8 +223,24 @@ class ConsciouscAgent:
                     copied_count += 1
 
             # Mark new memories as processed
-            memory_ids = [row[0] for row in new_memories]  # memory_id is first column
-            await self._mark_memories_processed(db_manager, memory_ids, namespace)
+            db_type = self._detect_database_type(db_manager)
+            if db_type == "mongodb":
+                memory_ids = [
+                    mem.get("memory_id")
+                    for mem in new_memories
+                    if isinstance(mem, dict) and mem.get("memory_id")
+                ]
+            else:
+                memory_ids = [
+                    row[0] for row in new_memories
+                ]  # memory_id is first column for SQL
+
+            if memory_ids:
+                await self._mark_memories_processed(db_manager, memory_ids, namespace)
+            else:
+                logger.warning(
+                    "ConsciouscAgent: No valid memory IDs found to mark as processed"
+                )
 
             logger.info(
                 f"ConsciouscAgent: Copied {copied_count} new conscious-info memories to short-term memory"
@@ -180,26 +248,41 @@ class ConsciouscAgent:
             return copied_count > 0
 
         except Exception as e:
-            logger.error(f"ConsciouscAgent: Context update failed: {e}")
+            logger.error(
+                f"ConsciouscAgent: Context update failed with exception: {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            logger.error(
+                f"ConsciouscAgent: Full error traceback: {traceback.format_exc()}"
+            )
             return False
 
-    async def _get_conscious_memories(self, db_manager, namespace: str) -> List[tuple]:
-        """Get all conscious-info labeled memories from long-term memory"""
+    async def _get_conscious_memories(self, db_manager, namespace: str) -> list:
+        """Get all conscious-info labeled memories from long-term memory (database-agnostic)"""
         try:
-            from sqlalchemy import text
+            db_type = self._detect_database_type(db_manager)
 
-            with db_manager._get_connection() as connection:
-                cursor = connection.execute(
-                    text(
-                        """SELECT memory_id, processed_data, summary, searchable_content,
-                              importance_score, created_at
-                       FROM long_term_memory
-                       WHERE namespace = :namespace AND classification = 'conscious-info'
-                       ORDER BY importance_score DESC, created_at DESC"""
-                    ),
-                    {"namespace": namespace},
-                )
-                return cursor.fetchall()
+            if db_type == "mongodb":
+                # Use MongoDB-specific method
+                memories = db_manager.get_conscious_memories(namespace=namespace)
+                return memories
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with db_manager._get_connection() as connection:
+                    cursor = connection.execute(
+                        text(
+                            """SELECT memory_id, processed_data, summary, searchable_content,
+                                  importance_score, created_at
+                           FROM long_term_memory
+                           WHERE namespace = :namespace AND classification = 'conscious-info'
+                           ORDER BY importance_score DESC, created_at DESC"""
+                        ),
+                        {"namespace": namespace},
+                    )
+                    return cursor.fetchall()
 
         except Exception as e:
             logger.error(f"ConsciouscAgent: Failed to get conscious memories: {e}")
@@ -207,33 +290,70 @@ class ConsciouscAgent:
 
     async def _get_unprocessed_conscious_memories(
         self, db_manager, namespace: str
-    ) -> List[tuple]:
-        """Get unprocessed conscious-info labeled memories from long-term memory"""
+    ) -> list:
+        """Get unprocessed conscious-info labeled memories from long-term memory (database-agnostic)"""
         try:
-            from sqlalchemy import text
+            db_type = self._detect_database_type(db_manager)
 
-            with db_manager._get_connection() as connection:
-                cursor = connection.execute(
-                    text(
-                        """SELECT memory_id, processed_data, summary, searchable_content,
-                              importance_score, created_at
-                       FROM long_term_memory
-                       WHERE namespace = :namespace AND classification = 'conscious-info'
-                       AND conscious_processed = :conscious_processed
-                       ORDER BY importance_score DESC, created_at DESC"""
-                    ),
-                    {"namespace": namespace, "conscious_processed": False},
+            if db_type == "mongodb":
+                # Use MongoDB-specific method
+                memories = db_manager.get_unprocessed_conscious_memories(
+                    namespace=namespace
                 )
-                return cursor.fetchall()
+                return memories
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with db_manager._get_connection() as connection:
+                    cursor = connection.execute(
+                        text(
+                            """SELECT memory_id, processed_data, summary, searchable_content,
+                                  importance_score, created_at
+                           FROM long_term_memory
+                           WHERE namespace = :namespace AND classification = 'conscious-info'
+                           AND conscious_processed = :conscious_processed
+                           ORDER BY importance_score DESC, created_at DESC"""
+                        ),
+                        {"namespace": namespace, "conscious_processed": False},
+                    )
+                    return cursor.fetchall()
 
         except Exception as e:
             logger.error(f"ConsciouscAgent: Failed to get unprocessed memories: {e}")
             return []
 
     async def _copy_memory_to_short_term(
+        self, db_manager, namespace: str, memory_data
+    ) -> bool:
+        """Copy a conscious memory directly to short-term memory with duplicate filtering (database-agnostic)"""
+        try:
+            db_type = self._detect_database_type(db_manager)
+
+            if db_type == "mongodb":
+                return await self._copy_memory_to_short_term_mongodb(
+                    db_manager, namespace, memory_data
+                )
+            else:
+                return await self._copy_memory_to_short_term_sql(
+                    db_manager, namespace, memory_data
+                )
+
+        except Exception as e:
+            memory_id = (
+                memory_data.get("memory_id")
+                if isinstance(memory_data, dict)
+                else memory_data[0]
+            )
+            logger.error(
+                f"ConsciouscAgent: Failed to copy memory {memory_id} to short-term: {e}"
+            )
+            return False
+
+    async def _copy_memory_to_short_term_sql(
         self, db_manager, namespace: str, memory_row: tuple
     ) -> bool:
-        """Copy a conscious memory directly to short-term memory with duplicate filtering"""
+        """Copy a conscious memory to short-term memory (SQL version)"""
         try:
             (
                 memory_id,
@@ -313,32 +433,124 @@ class ConsciouscAgent:
 
         except Exception as e:
             logger.error(
-                f"ConsciouscAgent: Failed to copy memory {memory_row[0]} to short-term: {e}"
+                f"ConsciouscAgent: Failed to copy SQL memory {memory_row[0]} to short-term: {e}"
+            )
+            return False
+
+    async def _copy_memory_to_short_term_mongodb(
+        self, db_manager, namespace: str, memory_data: dict
+    ) -> bool:
+        """Copy a conscious memory to short-term memory (MongoDB version)"""
+        try:
+            memory_id = memory_data.get("memory_id")
+            processed_data = memory_data.get("processed_data", "{}")
+            summary = memory_data.get("summary", "")
+            searchable_content = memory_data.get("searchable_content", "")
+            importance_score = memory_data.get("importance_score", 0.5)
+
+            logger.debug(
+                f"ConsciouscAgent: Processing MongoDB memory {memory_id} for short-term promotion"
+            )
+            logger.debug(f"  Content: {searchable_content[:100]}...")
+            logger.debug(f"  Summary: {summary[:100]}...")
+
+            # Check if similar content already exists in short-term memory
+            existing_memories = db_manager.search_short_term_memory(
+                query=searchable_content or summary, namespace=namespace, limit=1
+            )
+
+            # Check for exact duplicates
+            for existing in existing_memories:
+                if (
+                    existing.get("searchable_content") == searchable_content
+                    or existing.get("summary") == summary
+                ):
+                    logger.debug(
+                        f"ConsciouscAgent: Skipping duplicate memory {memory_id} - similar content already exists in short-term memory"
+                    )
+                    return False
+
+            # Create short-term memory ID
+            short_term_id = f"conscious_{memory_id}_{int(datetime.now().timestamp())}"
+
+            # Store in short-term memory using MongoDB-specific method
+            db_manager.store_short_term_memory(
+                memory_id=short_term_id,
+                processed_data=(
+                    processed_data
+                    if isinstance(processed_data, str)
+                    else json.dumps(processed_data)
+                ),
+                importance_score=importance_score,
+                category_primary="conscious_context",
+                retention_type="permanent",
+                namespace=namespace,
+                expires_at=None,  # No expiration (permanent)
+                searchable_content=searchable_content,
+                summary=summary,
+                is_permanent_context=True,
+            )
+
+            # Verify the memory was actually stored by directly finding it by memory_id
+            # Use direct lookup instead of text search since memory_id is not in text search index
+            verification_result = db_manager.find_short_term_memory_by_id(
+                memory_id=short_term_id, namespace=namespace
+            )
+
+            if not verification_result:
+                logger.error(
+                    f"ConsciouscAgent: VERIFICATION FAILED - Memory {short_term_id} not found in short-term memory after storage"
+                )
+                return False
+
+            logger.info(
+                f"ConsciouscAgent: Successfully copied memory {memory_id} to short-term as {short_term_id} (MongoDB) ✓ VERIFIED"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"ConsciouscAgent: Failed to copy MongoDB memory {memory_data.get('memory_id')} to short-term: {e}"
+            )
+            import traceback
+
+            logger.error(
+                f"ConsciouscAgent: Full error traceback: {traceback.format_exc()}"
             )
             return False
 
     async def _mark_memories_processed(
-        self, db_manager, memory_ids: List[str], namespace: str
+        self, db_manager, memory_ids: list[str], namespace: str
     ):
-        """Mark memories as processed for conscious context"""
+        """Mark memories as processed for conscious context (database-agnostic)"""
         try:
-            from sqlalchemy import text
+            if not memory_ids:
+                return
 
-            with db_manager._get_connection() as connection:
-                for memory_id in memory_ids:
-                    connection.execute(
-                        text(
-                            """UPDATE long_term_memory
-                           SET conscious_processed = :conscious_processed
-                           WHERE memory_id = :memory_id AND namespace = :namespace"""
-                        ),
-                        {
-                            "memory_id": memory_id,
-                            "namespace": namespace,
-                            "conscious_processed": True,
-                        },
-                    )
-                connection.commit()
+            db_type = self._detect_database_type(db_manager)
+
+            if db_type == "mongodb":
+                # Use MongoDB-specific method
+                db_manager.mark_conscious_memories_processed(memory_ids, namespace)
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with db_manager._get_connection() as connection:
+                    for memory_id in memory_ids:
+                        connection.execute(
+                            text(
+                                """UPDATE long_term_memory
+                               SET conscious_processed = :conscious_processed
+                               WHERE memory_id = :memory_id AND namespace = :namespace"""
+                            ),
+                            {
+                                "memory_id": memory_id,
+                                "namespace": namespace,
+                                "conscious_processed": True,
+                            },
+                        )
+                    connection.commit()
 
         except Exception as e:
             logger.error(f"ConsciouscAgent: Failed to mark memories processed: {e}")

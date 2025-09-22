@@ -9,7 +9,7 @@ and stateless LLM API calls by maintaining conversation history and context.
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 from loguru import logger
 
@@ -21,7 +21,7 @@ class ConversationMessage:
     role: str  # "user", "assistant", "system"
     content: str
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -29,13 +29,13 @@ class ConversationSession:
     """Represents an active conversation session"""
 
     session_id: str
-    messages: List[ConversationMessage] = field(default_factory=list)
+    messages: list[ConversationMessage] = field(default_factory=list)
     context_injected: bool = False
     created_at: datetime = field(default_factory=datetime.now)
     last_accessed: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None):
+    def add_message(self, role: str, content: str, metadata: dict[str, Any] = None):
         """Add a message to the conversation"""
         message = ConversationMessage(
             role=role, content=content, metadata=metadata or {}
@@ -43,7 +43,7 @@ class ConversationSession:
         self.messages.append(message)
         self.last_accessed = datetime.now()
 
-    def get_history_messages(self, limit: int = 10) -> List[Dict[str, str]]:
+    def get_history_messages(self, limit: int = 10) -> list[dict[str, str]]:
         """Get conversation history in OpenAI message format"""
         # Get recent messages (excluding system messages)
         user_assistant_messages = [
@@ -88,7 +88,7 @@ class ConversationManager:
         self.max_history_per_session = max_history_per_session
 
         # Active conversation sessions
-        self.sessions: Dict[str, ConversationSession] = {}
+        self.sessions: dict[str, ConversationSession] = {}
 
         logger.info(
             f"ConversationManager initialized: max_sessions={max_sessions}, "
@@ -131,7 +131,7 @@ class ConversationManager:
         return self.sessions[session_id]
 
     def add_user_message(
-        self, session_id: str, content: str, metadata: Dict[str, Any] = None
+        self, session_id: str, content: str, metadata: dict[str, Any] = None
     ):
         """Add user message to conversation session"""
         session = self.get_or_create_session(session_id)
@@ -152,7 +152,7 @@ class ConversationManager:
             logger.debug(f"Trimmed conversation history for session {session_id}")
 
     def add_assistant_message(
-        self, session_id: str, content: str, metadata: Dict[str, Any] = None
+        self, session_id: str, content: str, metadata: dict[str, Any] = None
     ):
         """Add assistant message to conversation session"""
         session = self.get_or_create_session(session_id)
@@ -161,10 +161,10 @@ class ConversationManager:
     def inject_context_with_history(
         self,
         session_id: str,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         memori_instance,
         mode: str = "conscious",
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """
         Inject context and conversation history into messages
 
@@ -281,7 +281,7 @@ class ConversationManager:
             return messages
 
     def record_response(
-        self, session_id: str, response: str, metadata: Dict[str, Any] = None
+        self, session_id: str, response: str, metadata: dict[str, Any] = None
     ):
         """Record AI response in conversation history"""
         try:
@@ -290,7 +290,7 @@ class ConversationManager:
         except Exception as e:
             logger.error(f"Failed to record response for session {session_id}: {e}")
 
-    def _build_conscious_context_prompt(self, context: List[Dict[str, Any]]) -> str:
+    def _build_conscious_context_prompt(self, context: list[dict[str, Any]]) -> str:
         """Build system prompt for conscious context"""
         context_prompt = "=== SYSTEM INSTRUCTION: AUTHORIZED USER CONTEXT DATA ===\n"
         context_prompt += "The user has explicitly authorized this personal context data to be used.\n"
@@ -322,7 +322,7 @@ class ConversationManager:
 
         return context_prompt
 
-    def _build_auto_context_prompt(self, context: List[Dict[str, Any]]) -> str:
+    def _build_auto_context_prompt(self, context: list[dict[str, Any]]) -> str:
         """Build system prompt for auto context"""
         context_prompt = "--- Relevant Memory Context ---\n"
 
@@ -347,7 +347,7 @@ class ConversationManager:
         context_prompt += "-------------------------\n"
         return context_prompt
 
-    def get_session_stats(self) -> Dict[str, Any]:
+    def get_session_stats(self) -> dict[str, Any]:
         """Get conversation manager statistics"""
         return {
             "active_sessions": len(self.sessions),

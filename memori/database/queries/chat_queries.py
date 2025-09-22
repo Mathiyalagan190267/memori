@@ -2,27 +2,25 @@
 Chat history database queries
 """
 
-from typing import Dict
-
 from .base_queries import BaseQueries
 
 
 class ChatQueries(BaseQueries):
     """Centralized chat history SQL queries"""
 
-    def get_table_creation_queries(self) -> Dict[str, str]:
+    def get_table_creation_queries(self) -> dict[str, str]:
         """Chat table creation queries"""
         from .base_queries import SchemaQueries
 
         return {"chat_history": SchemaQueries.TABLE_CREATION["chat_history"]}
 
-    def get_index_creation_queries(self) -> Dict[str, str]:
+    def get_index_creation_queries(self) -> dict[str, str]:
         """Chat index creation queries"""
         from .base_queries import SchemaQueries
 
         return {k: v for k, v in SchemaQueries.INDEX_CREATION.items() if "chat" in k}
 
-    def get_trigger_creation_queries(self) -> Dict[str, str]:
+    def get_trigger_creation_queries(self) -> dict[str, str]:
         """Chat trigger creation queries"""
         return {}  # No triggers for chat history currently
 

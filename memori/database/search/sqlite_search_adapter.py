@@ -4,7 +4,7 @@ Maintains existing FTS5 functionality
 """
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -34,9 +34,9 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute FTS5 search or fallback to LIKE search"""
         if self.fts5_available:
             try:
@@ -53,9 +53,9 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute FTS5 search (adapted from original implementation)"""
         # Build FTS query with category filter - handle empty queries
         if query and query.strip():
@@ -119,7 +119,7 @@ class SQLiteSearchAdapter(BaseSearchAdapter):
 
         return self.connector.execute_query(sql_query, params)
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create FTS5 virtual table and triggers"""
         if not self.fts5_available:
             logger.warning("FTS5 not available, skipping FTS index creation")

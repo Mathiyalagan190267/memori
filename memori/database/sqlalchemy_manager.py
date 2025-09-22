@@ -9,7 +9,7 @@ import ssl
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from loguru import logger
@@ -461,7 +461,7 @@ class SQLAlchemyDatabaseManager:
         session_id: str,
         namespace: str = "default",
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Store chat history"""
         with self.SessionLocal() as session:
@@ -488,9 +488,9 @@ class SQLAlchemyDatabaseManager:
     def get_chat_history(
         self,
         namespace: str = "default",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get chat history with optional session filtering"""
         with self.SessionLocal() as session:
             try:
@@ -581,9 +581,9 @@ class SQLAlchemyDatabaseManager:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories using the cross-database search service"""
         search_service = None
         try:
@@ -630,7 +630,7 @@ class SQLAlchemyDatabaseManager:
                 except Exception as session_e:
                     logger.warning(f"Error closing search service session: {session_e}")
 
-    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+    def get_memory_stats(self, namespace: str = "default") -> dict[str, Any]:
         """Get comprehensive memory statistics"""
         with self.SessionLocal() as session:
             try:
@@ -727,9 +727,7 @@ class SQLAlchemyDatabaseManager:
             except SQLAlchemyError as e:
                 raise DatabaseError(f"Failed to get memory stats: {e}")
 
-    def clear_memory(
-        self, namespace: str = "default", memory_type: Optional[str] = None
-    ):
+    def clear_memory(self, namespace: str = "default", memory_type: str | None = None):
         """Clear memory data"""
         with self.SessionLocal() as session:
             try:
@@ -762,7 +760,7 @@ class SQLAlchemyDatabaseManager:
                 session.rollback()
                 raise DatabaseError(f"Failed to clear memory: {e}")
 
-    def execute_with_translation(self, query: str, parameters: Dict[str, Any] = None):
+    def execute_with_translation(self, query: str, parameters: dict[str, Any] = None):
         """
         Execute a query with automatic parameter translation for cross-database compatibility.
 
@@ -865,7 +863,7 @@ class SQLAlchemyDatabaseManager:
         if hasattr(self, "engine"):
             self.engine.dispose()
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information and capabilities"""
         base_info = {
             "database_type": self.database_type,

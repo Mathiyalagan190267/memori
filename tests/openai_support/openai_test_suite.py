@@ -2,7 +2,6 @@ import os
 import shutil
 import sys
 import time
-from typing import Dict, List, Tuple
 
 # Fix imports to work from any directory
 if __name__ == "__main__":
@@ -37,7 +36,7 @@ class OpenAITestSuite:
         self.start_time = None
         self.end_time = None
 
-    def run_provider_tests(self, provider_name: str, test_module) -> Tuple[bool, str]:
+    def run_provider_tests(self, provider_name: str, test_module) -> tuple[bool, str]:
         """
         Run tests for a specific provider.
 
@@ -81,7 +80,7 @@ class OpenAITestSuite:
                 except Exception as e:
                     print(f"   Warning: Could not remove {db_dir}: {e}")
 
-    def collect_database_stats(self) -> Dict[str, List[Dict]]:
+    def collect_database_stats(self) -> dict[str, list[dict]]:
         """Collect statistics from all created test databases."""
         stats = {}
 
@@ -116,7 +115,7 @@ class OpenAITestSuite:
         return stats
 
     def display_summary(
-        self, results: Dict[str, Tuple[bool, str]], db_stats: Dict[str, List[Dict]]
+        self, results: dict[str, tuple[bool, str]], db_stats: dict[str, list[dict]]
     ):
         """Display comprehensive test summary with detailed validation results."""
 

@@ -4,7 +4,7 @@ Provides cross-database full-text search capabilities
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import and_, desc, or_, text
@@ -24,10 +24,10 @@ class SearchService:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-        memory_types: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        memory_types: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search memories across different database backends
 
@@ -151,11 +151,11 @@ class SearchService:
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
         search_short_term: bool,
         search_long_term: bool,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search using SQLite FTS5"""
         try:
             logger.debug(
@@ -259,11 +259,11 @@ class SearchService:
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
         search_short_term: bool,
         search_long_term: bool,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search using MySQL FULLTEXT"""
         results = []
 
@@ -356,11 +356,11 @@ class SearchService:
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
         search_short_term: bool,
         search_long_term: bool,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search using PostgreSQL tsvector"""
         results = []
 
@@ -461,11 +461,11 @@ class SearchService:
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
         search_short_term: bool,
         search_long_term: bool,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Fallback LIKE-based search with improved flexibility"""
         logger.debug(
             f"Starting LIKE fallback search for query: '{query}' in namespace: '{namespace}'"
@@ -592,10 +592,10 @@ class SearchService:
     def _get_recent_memories(
         self,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
-        memory_types: Optional[List[str]],
-    ) -> List[Dict[str, Any]]:
+        memory_types: list[str] | None,
+    ) -> list[dict[str, Any]]:
         """Get recent memories when no search query is provided"""
         results = []
 
@@ -667,8 +667,8 @@ class SearchService:
         return results
 
     def _rank_and_limit_results(
-        self, results: List[Dict[str, Any]], limit: int
-    ) -> List[Dict[str, Any]]:
+        self, results: list[dict[str, Any]], limit: int
+    ) -> list[dict[str, Any]]:
         """Rank and limit search results"""
         # Calculate composite score
         for result in results:

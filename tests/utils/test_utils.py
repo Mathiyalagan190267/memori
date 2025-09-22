@@ -1,8 +1,7 @@
 import json
-from typing import List, Optional
 
 
-def load_inputs(json_file_path: str, limit: Optional[int] = None) -> List[str]:
+def load_inputs(json_file_path: str, limit: int | None = None) -> list[str]:
     """
     Load test inputs from JSON file and return as a list of strings.
 

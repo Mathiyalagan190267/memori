@@ -6,7 +6,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -22,7 +22,7 @@ except ImportError:
 from ..agents.conscious_agent import ConsciouscAgent
 from ..config.memory_manager import MemoryManager
 from ..config.settings import LoggingSettings, LogLevel
-from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager as DatabaseManager
+from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager
 from ..utils.exceptions import DatabaseError, MemoriError
 from ..utils.logging import LoggingManager
 from ..utils.pydantic_models import ConversationContext
@@ -41,30 +41,30 @@ class Memori:
         self,
         database_connect: str = "sqlite:///memori.db",
         template: str = "basic",
-        mem_prompt: Optional[str] = None,
+        mem_prompt: str | None = None,
         conscious_ingest: bool = False,
         auto_ingest: bool = False,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         shared_memory: bool = False,
-        memory_filters: Optional[Dict[str, Any]] = None,
-        openai_api_key: Optional[str] = None,
-        user_id: Optional[str] = None,
+        memory_filters: dict[str, Any] | None = None,
+        openai_api_key: str | None = None,
+        user_id: str | None = None,
         verbose: bool = False,
         # New provider configuration parameters
-        api_key: Optional[str] = None,
-        api_type: Optional[str] = None,
-        base_url: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
-        api_version: Optional[str] = None,
-        azure_ad_token: Optional[str] = None,
-        organization: Optional[str] = None,
-        project: Optional[str] = None,
-        model: Optional[str] = None,  # Allow custom model selection
-        provider_config: Optional[Any] = None,  # ProviderConfig when available
+        api_key: str | None = None,
+        api_type: str | None = None,
+        base_url: str | None = None,
+        azure_endpoint: str | None = None,
+        azure_deployment: str | None = None,
+        api_version: str | None = None,
+        azure_ad_token: str | None = None,
+        organization: str | None = None,
+        project: str | None = None,
+        model: str | None = None,  # Allow custom model selection
+        provider_config: Any | None = None,  # ProviderConfig when available
         schema_init: bool = True,  # Initialize database schema and create tables
-        database_prefix: Optional[str] = None,  # Database name prefix
-        database_suffix: Optional[str] = None,  # Database name suffix
+        database_prefix: str | None = None,  # Database name prefix
+        database_suffix: str | None = None,  # Database name suffix
     ):
         """
         Initialize Memori memory system v1.0.
@@ -185,8 +185,10 @@ class Memori:
         # Setup logging based on verbose mode
         self._setup_logging()
 
-        # Initialize database manager
-        self.db_manager = DatabaseManager(database_connect, template, schema_init)
+        # Initialize database manager (detect MongoDB vs SQL)
+        self.db_manager = self._create_database_manager(
+            database_connect, template, schema_init
+        )
 
         # Initialize Pydantic-based agents
         self.memory_agent = None
@@ -318,6 +320,62 @@ class Memori:
                 logger.info(
                     "Verbose logging enabled - only loguru logs will be displayed"
                 )
+
+    def _create_database_manager(
+        self, database_connect: str, template: str, schema_init: bool
+    ):
+        """Create appropriate database manager based on connection string with fallback"""
+        try:
+            # Detect MongoDB connection strings
+            if self._is_mongodb_connection(database_connect):
+                logger.info(
+                    "Detected MongoDB connection string - attempting MongoDB manager"
+                )
+                try:
+                    from ..database.mongodb_manager import MongoDBDatabaseManager
+
+                    # Test MongoDB connection before proceeding
+                    manager = MongoDBDatabaseManager(
+                        database_connect, template, schema_init
+                    )
+                    # Verify connection works
+                    _ = manager._get_client()
+                    logger.info("MongoDB manager initialized successfully")
+                    return manager
+                except ImportError:
+                    logger.error(
+                        "MongoDB support requires pymongo. Install with: pip install pymongo"
+                    )
+                    logger.info("Falling back to SQLite for compatibility")
+                    return self._create_fallback_sqlite_manager(template, schema_init)
+                except Exception as e:
+                    logger.error(f"MongoDB connection failed: {e}")
+                    logger.info("Falling back to SQLite for compatibility")
+                    return self._create_fallback_sqlite_manager(template, schema_init)
+            else:
+                logger.info("Detected SQL connection string - using SQLAlchemy manager")
+                return SQLAlchemyDatabaseManager(
+                    database_connect, template, schema_init
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to create database manager: {e}")
+            logger.info("Creating fallback SQLite manager")
+            return self._create_fallback_sqlite_manager(template, schema_init)
+
+    def _create_fallback_sqlite_manager(self, template: str, schema_init: bool):
+        """Create fallback SQLite manager when other options fail"""
+        fallback_connect = "sqlite:///memori_fallback.db"
+        logger.warning(f"Using fallback SQLite database: {fallback_connect}")
+        return SQLAlchemyDatabaseManager(fallback_connect, template, schema_init)
+
+    def _is_mongodb_connection(self, database_connect: str) -> bool:
+        """Detect if connection string is for MongoDB"""
+        mongodb_prefixes = [
+            "mongodb://",
+            "mongodb+srv://",
+        ]
+        return any(database_connect.startswith(prefix) for prefix in mongodb_prefixes)
 
     def _setup_database(self):
         """Setup database tables based on template"""
@@ -572,7 +630,7 @@ class Memori:
             )
             return False
 
-    def enable(self, interceptors: Optional[List[str]] = None):
+    def enable(self, interceptors: list[str] | None = None):
         """
         Enable universal memory recording using LiteLLM's native callback system.
 
@@ -665,11 +723,11 @@ class Memori:
 
     # Memory system status and control methods
 
-    def get_interceptor_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_interceptor_status(self) -> dict[str, dict[str, Any]]:
         """Get status of memory recording system"""
         return self.memory_manager.get_status()
 
-    def get_interceptor_health(self) -> Dict[str, Any]:
+    def get_interceptor_health(self) -> dict[str, Any]:
         """Get health check of interceptor system"""
         return self.memory_manager.get_health()
 
@@ -955,58 +1013,94 @@ class Memori:
 
         return params
 
-    def _get_conscious_context(self) -> List[Dict[str, Any]]:
+    def _get_conscious_context(self) -> list[dict[str, Any]]:
         """
         Get conscious context from ALL short-term memory summaries.
         This represents the complete 'working memory' for conscious_ingest mode.
         Used only at program startup when conscious_ingest=True.
+        Database-agnostic version that works with both SQL and MongoDB.
         """
         try:
-            from sqlalchemy import text
+            # Detect database type from the db_manager
+            db_type = getattr(self.db_manager, "database_type", "sql")
 
-            with self.db_manager._get_connection() as conn:
-                # Get ALL short-term memories (no limit) ordered by importance and recency
-                # This gives the complete conscious context as single initial injection
-                result = conn.execute(
-                    text(
-                        """
-                    SELECT memory_id, processed_data, importance_score,
-                           category_primary, summary, searchable_content,
-                           created_at, access_count
-                    FROM short_term_memory
-                    WHERE namespace = :namespace AND (expires_at IS NULL OR expires_at > :current_time)
-                    ORDER BY importance_score DESC, created_at DESC
-                    """
-                    ),
-                    {"namespace": self.namespace, "current_time": datetime.now()},
+            if db_type == "mongodb":
+                # Use MongoDB-specific method
+                memories = self.db_manager.get_short_term_memory(
+                    namespace=self.namespace,
+                    limit=1000,  # Large limit to get all memories
+                    include_expired=False,
                 )
 
-                memories = []
-                for row in result:
-                    memories.append(
+                # Convert to consistent format
+                formatted_memories = []
+                for memory in memories:
+                    formatted_memories.append(
                         {
-                            "memory_id": row[0],
-                            "processed_data": row[1],
-                            "importance_score": row[2],
-                            "category_primary": row[3],
-                            "summary": row[4],
-                            "searchable_content": row[5],
-                            "created_at": row[6],
-                            "access_count": row[7],
+                            "memory_id": memory.get("memory_id"),
+                            "processed_data": memory.get("processed_data"),
+                            "importance_score": memory.get("importance_score", 0),
+                            "category_primary": memory.get("category_primary", ""),
+                            "summary": memory.get("summary", ""),
+                            "searchable_content": memory.get("searchable_content", ""),
+                            "created_at": memory.get("created_at"),
+                            "access_count": memory.get("access_count", 0),
                             "memory_type": "short_term",
                         }
                     )
 
                 logger.debug(
-                    f"Retrieved {len(memories)} conscious memories from short-term storage"
+                    f"Retrieved {len(formatted_memories)} conscious memories from MongoDB short-term storage"
                 )
-                return memories
+                return formatted_memories
+
+            else:
+                # Use SQL method
+                from sqlalchemy import text
+
+                with self.db_manager._get_connection() as conn:
+                    # Get ALL short-term memories (no limit) ordered by importance and recency
+                    # This gives the complete conscious context as single initial injection
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT memory_id, processed_data, importance_score,
+                               category_primary, summary, searchable_content,
+                               created_at, access_count
+                        FROM short_term_memory
+                        WHERE namespace = :namespace AND (expires_at IS NULL OR expires_at > :current_time)
+                        ORDER BY importance_score DESC, created_at DESC
+                        """
+                        ),
+                        {"namespace": self.namespace, "current_time": datetime.now()},
+                    )
+
+                    memories = []
+                    for row in result:
+                        memories.append(
+                            {
+                                "memory_id": row[0],
+                                "processed_data": row[1],
+                                "importance_score": row[2],
+                                "category_primary": row[3],
+                                "summary": row[4],
+                                "searchable_content": row[5],
+                                "created_at": row[6],
+                                "access_count": row[7],
+                                "memory_type": "short_term",
+                            }
+                        )
+
+                    logger.debug(
+                        f"Retrieved {len(memories)} conscious memories from SQL short-term storage"
+                    )
+                    return memories
 
         except Exception as e:
             logger.error(f"Failed to get conscious context: {e}")
             return []
 
-    def _get_auto_ingest_context(self, user_input: str) -> List[Dict[str, Any]]:
+    def _get_auto_ingest_context(self, user_input: str) -> list[dict[str, Any]]:
         """
         Get auto-ingest context using retrieval agent for intelligent search.
         Searches through entire database for relevant memories.
@@ -1209,7 +1303,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Failed to record OpenAI conversation: {e}")
 
-    def _extract_openai_user_input(self, messages: List[Dict]) -> str:
+    def _extract_openai_user_input(self, messages: list[dict]) -> str:
         """Extract user input from OpenAI messages with support for complex content types"""
         user_input = ""
         try:
@@ -1288,8 +1382,8 @@ class Memori:
         return ai_output
 
     def _extract_openai_metadata(
-        self, kwargs: Dict, response, tokens_used: int
-    ) -> Dict:
+        self, kwargs: dict, response, tokens_used: int
+    ) -> dict:
         """Extract comprehensive metadata from OpenAI request and response"""
         metadata = {
             "integration": "openai_auto",
@@ -1383,7 +1477,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Failed to record Anthropic conversation: {e}")
 
-    def _extract_anthropic_user_input(self, messages: List[Dict]) -> str:
+    def _extract_anthropic_user_input(self, messages: list[dict]) -> str:
         """Extract user input from Anthropic messages with support for complex content types"""
         user_input = ""
         try:
@@ -1483,8 +1577,8 @@ class Memori:
         return tokens_used
 
     def _extract_anthropic_metadata(
-        self, kwargs: Dict, response, tokens_used: int
-    ) -> Dict:
+        self, kwargs: dict, response, tokens_used: int
+    ) -> dict:
         """Extract comprehensive metadata from Anthropic request and response"""
         metadata = {
             "integration": "anthropic_auto",
@@ -1608,40 +1702,134 @@ class Memori:
     # in memori.integrations.litellm_integration
 
     def _process_memory_sync(
-        self, chat_id: str, user_input: str, ai_output: str, model: str = "unknown"
+        self,
+        chat_id: str,
+        user_input: str,
+        ai_output: str,
+        model: str = "unknown",
+        retry_count: int = 0,
     ):
-        """Synchronous memory processing fallback"""
+        """Synchronous memory processing fallback with retry logic"""
         if not self.memory_agent:
             logger.warning("Memory agent not available, skipping memory ingestion")
             return
+
+        max_retries = 2  # Maximum retry attempts
 
         try:
             # Run async processing in new event loop
             import threading
 
             def run_memory_processing():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
+                """Run memory processing with improved event loop management"""
+                new_loop = None
                 try:
+                    # Check if we're already in an async context
+                    try:
+                        current_loop = asyncio.get_running_loop()
+                        logger.debug(
+                            "Found existing event loop, creating new one for memory processing"
+                        )
+                    except RuntimeError:
+                        # No running loop, safe to create new one
+                        logger.debug("No existing event loop found, creating new one")
+
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+
+                    logger.debug(
+                        f"Starting memory processing for {chat_id} (attempt {retry_count + 1})"
+                    )
+
+                    # Add timeout to prevent hanging
                     new_loop.run_until_complete(
-                        self._process_memory_async(
-                            chat_id, user_input, ai_output, model
+                        asyncio.wait_for(
+                            self._process_memory_async(
+                                chat_id, user_input, ai_output, model
+                            ),
+                            timeout=60.0,  # 60 second timeout
                         )
                     )
+                    logger.debug(
+                        f"Memory processing completed successfully for {chat_id}"
+                    )
+
+                except asyncio.TimeoutError as e:
+                    logger.error(
+                        f"Memory processing timed out for {chat_id} (attempt {retry_count + 1}): {e}"
+                    )
+                    if retry_count < max_retries:
+                        logger.info(
+                            f"Retrying memory processing for {chat_id} ({retry_count + 1}/{max_retries})"
+                        )
+                        # Schedule retry
+                        import time
+
+                        time.sleep(2)  # Wait 2 seconds before retry
+                        self._process_memory_sync(
+                            chat_id, user_input, ai_output, model, retry_count + 1
+                        )
                 except Exception as e:
-                    logger.error(f"Synchronous memory processing failed: {e}")
+                    logger.error(
+                        f"Memory processing failed for {chat_id} (attempt {retry_count + 1}): {e}"
+                    )
+                    import traceback
+
+                    logger.error(f"Full error traceback: {traceback.format_exc()}")
+                    if retry_count < max_retries:
+                        logger.info(
+                            f"Retrying memory processing for {chat_id} ({retry_count + 1}/{max_retries})"
+                        )
+                        # Schedule retry
+                        import time
+
+                        time.sleep(2)  # Wait 2 seconds before retry
+                        self._process_memory_sync(
+                            chat_id, user_input, ai_output, model, retry_count + 1
+                        )
                 finally:
-                    new_loop.close()
+                    if new_loop and not new_loop.is_closed():
+                        # Clean up pending tasks
+                        pending = asyncio.all_tasks(new_loop)
+                        if pending:
+                            logger.debug(f"Cancelling {len(pending)} pending tasks")
+                            for task in pending:
+                                task.cancel()
+                            # Wait for cancellation to complete
+                            new_loop.run_until_complete(
+                                asyncio.gather(*pending, return_exceptions=True)
+                            )
+
+                        new_loop.close()
+                        logger.debug(f"Event loop closed for {chat_id}")
+
+                    # Reset event loop policy to prevent conflicts
+                    try:
+                        asyncio.set_event_loop(None)
+                    except:
+                        pass
 
             # Run in background thread to avoid blocking
             thread = threading.Thread(target=run_memory_processing, daemon=True)
             thread.start()
             logger.debug(
-                f"Memory processing started in background thread for {chat_id}"
+                f"Memory processing started in background thread for {chat_id} (attempt {retry_count + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to start synchronous memory processing: {e}")
+            logger.error(
+                f"Failed to start synchronous memory processing for {chat_id}: {e}"
+            )
+            if retry_count < max_retries:
+                logger.info(
+                    f"Retrying memory processing startup for {chat_id} ({retry_count + 1}/{max_retries})"
+                )
+                import time
+
+                time.sleep(2)
+                self._process_memory_sync(
+                    chat_id, user_input, ai_output, model, retry_count + 1
+                )
 
     def _parse_llm_response(self, response) -> tuple[str, str]:
         """Extract text and model from various LLM response formats."""
@@ -1685,7 +1873,7 @@ class Memori:
         user_input: str,
         ai_output=None,
         model: str = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Record a conversation.
@@ -1702,6 +1890,11 @@ class Memori:
         if not self._enabled:
             raise MemoriError("Memori is not enabled. Call enable() first.")
 
+        # Debug logging for conversation recording
+        logger.info(
+            f"Recording conversation - Input: '{user_input[:100]}...' Model: {model}"
+        )
+
         # Parse response
         response_text, detected_model = self._parse_llm_response(ai_output)
         response_model = model or detected_model
@@ -1710,26 +1903,42 @@ class Memori:
         chat_id = str(uuid.uuid4())
         timestamp = datetime.now()
 
-        # Store conversation
-        self.db_manager.store_chat_history(
-            chat_id=chat_id,
-            user_input=user_input,
-            ai_output=response_text,
-            model=response_model,
-            timestamp=timestamp,
-            session_id=self._session_id,
-            namespace=self.namespace,
-            metadata=metadata or {},
-        )
-
-        # Always process into long-term memory when memory agent is available
-        if self.memory_agent:
-            self._schedule_memory_processing(
-                chat_id, user_input, response_text, response_model
+        try:
+            # Store conversation
+            self.db_manager.store_chat_history(
+                chat_id=chat_id,
+                user_input=user_input,
+                ai_output=response_text,
+                model=response_model,
+                timestamp=timestamp,
+                session_id=self._session_id,
+                namespace=self.namespace,
+                metadata=metadata or {},
+            )
+            logger.debug(
+                f"Successfully stored chat history for conversation: {chat_id}"
             )
 
-        logger.debug(f"Recorded conversation: {chat_id}")
-        return chat_id
+            # Always process into long-term memory when memory agent is available
+            if self.memory_agent:
+                self._schedule_memory_processing(
+                    chat_id, user_input, response_text, response_model
+                )
+                logger.debug(f"Scheduled memory processing for conversation: {chat_id}")
+            else:
+                logger.warning(
+                    f"Memory agent not available, skipping memory processing for: {chat_id}"
+                )
+
+            logger.info(f"Recorded conversation successfully: {chat_id}")
+            return chat_id
+
+        except Exception as e:
+            logger.error(f"Failed to record conversation {chat_id}: {e}")
+            import traceback
+
+            logger.error(f"Recording error details: {traceback.format_exc()}")
+            raise
 
     def _schedule_memory_processing(
         self, chat_id: str, user_input: str, ai_output: str, model: str
@@ -1826,7 +2035,7 @@ class Memori:
         except Exception as e:
             logger.error(f"Memory ingestion failed for {chat_id}: {e}")
 
-    async def _get_recent_memories_for_dedup(self) -> List:
+    async def _get_recent_memories_for_dedup(self) -> list:
         """Get recent memories for deduplication check"""
         try:
             from sqlalchemy import text
@@ -1872,7 +2081,7 @@ class Memori:
             logger.error(f"Failed to get recent memories for dedup: {e}")
             return []
 
-    def retrieve_context(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def retrieve_context(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """
         Retrieve relevant context for a query with priority on essential facts
 
@@ -1929,7 +2138,7 @@ class Memori:
             logger.error(f"Context retrieval failed: {e}")
             return []
 
-    def get_conversation_history(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_conversation_history(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent conversation history"""
         try:
             return self.db_manager.get_chat_history(
@@ -1941,7 +2150,7 @@ class Memori:
             logger.error(f"Failed to get conversation history: {e}")
             return []
 
-    def clear_memory(self, memory_type: Optional[str] = None):
+    def clear_memory(self, memory_type: str | None = None):
         """
         Clear memory data
 
@@ -1956,7 +2165,7 @@ class Memori:
         except Exception as e:
             raise MemoriError(f"Failed to clear memory: {e}")
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """Get memory statistics"""
         try:
             return self.db_manager.get_memory_stats(self.namespace)
@@ -1974,7 +2183,7 @@ class Memori:
         """Get current session ID"""
         return self._session_id
 
-    def get_integration_stats(self) -> List[Dict[str, Any]]:
+    def get_integration_stats(self) -> list[dict[str, Any]]:
         """Get statistics from the new interceptor system"""
         try:
             # Get system status first
@@ -2054,9 +2263,9 @@ class Memori:
 
     def update_user_context(
         self,
-        current_projects: Optional[List[str]] = None,
-        relevant_skills: Optional[List[str]] = None,
-        user_preferences: Optional[List[str]] = None,
+        current_projects: list[str] | None = None,
+        relevant_skills: list[str] | None = None,
+        user_preferences: list[str] | None = None,
     ):
         """Update user context for better memory processing"""
         if current_projects is not None:
@@ -2070,7 +2279,7 @@ class Memori:
 
     def search_memories_by_category(
         self, category: str, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories by specific category"""
         try:
             return self.db_manager.search_memories(
@@ -2084,8 +2293,8 @@ class Memori:
             return []
 
     def get_entity_memories(
-        self, entity_value: str, entity_type: Optional[str] = None, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, entity_value: str, entity_type: str | None = None, limit: int = 10
+    ) -> list[dict[str, Any]]:
         """Get memories that contain a specific entity"""
         try:
             # This would use the entity index in the database
@@ -2155,6 +2364,68 @@ class Memori:
                 logger.info("Background analysis task stopped")
         except Exception as e:
             logger.error(f"Failed to stop background analysis: {e}")
+
+    def add(self, text: str, metadata: dict[str, Any] | None = None) -> str:
+        """
+        Add a memory or text to the system.
+
+        This is a unified method that works with both SQL and MongoDB backends.
+        For simple text memories, it will be processed and categorized automatically.
+
+        Args:
+            text: The text content to store as memory
+            metadata: Optional metadata to store with the memory
+
+        Returns:
+            str: Unique identifier for the stored memory/conversation
+        """
+        if not self._enabled:
+            self.enable()
+
+        # For simple text memories, we treat them as user inputs with AI acknowledgment
+        # This ensures they get processed through the normal memory pipeline
+        ai_response = "Memory recorded successfully"
+
+        return self.record_conversation(
+            user_input=text,
+            ai_output=ai_response,
+            metadata=metadata or {"type": "manual_memory", "source": "add_method"},
+        )
+
+    def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """
+        Search for memories/conversations based on a query.
+
+        This is a unified method that works with both SQL and MongoDB backends.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+
+        Returns:
+            List of matching memories with their content and metadata
+        """
+        if not self._enabled:
+            logger.warning("Memori is not enabled. Returning empty results.")
+            return []
+
+        try:
+            # Use the existing retrieve_context method for consistency
+            return self.retrieve_context(query, limit=limit)
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return []
+
+    def get_stats(self) -> dict[str, Any]:
+        """
+        Get memory statistics.
+
+        This is a unified method that works with both SQL and MongoDB backends.
+
+        Returns:
+            Dictionary containing memory statistics
+        """
+        return self.get_memory_stats()
 
     def cleanup(self):
         """Clean up all async tasks and resources"""
@@ -2391,7 +2662,7 @@ class Memori:
             logger.error(f"Failed to add memory to messages: {e}")
             return messages
 
-    def get_essential_conversations(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_essential_conversations(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get essential conversations from short-term memory"""
         try:
             from sqlalchemy import text
@@ -2491,7 +2762,7 @@ class Memori:
 
     # Conversation management methods
 
-    def get_conversation_stats(self) -> Dict[str, Any]:
+    def get_conversation_stats(self) -> dict[str, Any]:
         """Get conversation manager statistics"""
         return self.conversation_manager.get_session_stats()
 

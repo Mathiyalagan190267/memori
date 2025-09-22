@@ -7,7 +7,7 @@ import html
 import json
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from loguru import logger
 
@@ -95,9 +95,7 @@ class InputValidator:
         return sanitized_namespace
 
     @classmethod
-    def validate_category_filter(
-        cls, category_filter: Optional[List[str]]
-    ) -> List[str]:
+    def validate_category_filter(cls, category_filter: list[str] | None) -> list[str]:
         """Validate and sanitize category filter list"""
         if category_filter is None:
             return []
@@ -130,7 +128,7 @@ class InputValidator:
         return sanitized_categories
 
     @classmethod
-    def validate_limit(cls, limit: Union[int, str]) -> int:
+    def validate_limit(cls, limit: int | str) -> int:
         """Validate and sanitize limit parameter"""
         try:
             int_limit = int(limit)
@@ -223,7 +221,7 @@ class InputValidator:
         return sanitized_content.strip()
 
     @classmethod
-    def validate_timestamp(cls, timestamp: Union[datetime, str, None]) -> datetime:
+    def validate_timestamp(cls, timestamp: datetime | str | None) -> datetime:
         """Validate and normalize timestamp"""
         if timestamp is None:
             return datetime.now()
@@ -246,7 +244,7 @@ class InputValidator:
 
     @classmethod
     def validate_score(
-        cls, score: Union[float, int, str], field_name: str = "score"
+        cls, score: float | int | str, field_name: str = "score"
     ) -> float:
         """Validate and normalize score values (0.0 to 1.0)"""
         try:
@@ -328,8 +326,8 @@ class DatabaseInputValidator:
 
     @classmethod
     def validate_insert_params(
-        cls, table: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        cls, table: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         """Validate parameters for database insert operations"""
         sanitized_params = {}
 
@@ -383,9 +381,9 @@ class DatabaseInputValidator:
         cls,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Validate all search parameters together"""
         return {
             "query": InputValidator.validate_and_sanitize_query(query),

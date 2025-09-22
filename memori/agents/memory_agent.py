@@ -7,7 +7,7 @@ enhanced classification and conscious context detection.
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import openai
 from loguru import logger
@@ -30,8 +30,8 @@ class MemoryAgent:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
+        api_key: str | None = None,
+        model: str | None = None,
         provider_config: Optional["ProviderConfig"] = None,
     ):
         """
@@ -59,6 +59,16 @@ class MemoryAgent:
 
         # Determine if we're using a local/custom endpoint that might not support structured outputs
         self._supports_structured_outputs = self._detect_structured_output_support()
+
+        # Database type detection for unified processing
+        self._database_type = None
+
+    def _detect_database_type(self, db_manager):
+        """Detect database type from db_manager"""
+        if self._database_type is None:
+            self._database_type = getattr(db_manager, "database_type", "sql")
+            logger.debug(f"MemoryAgent: Detected database type: {self._database_type}")
+        return self._database_type
 
     SYSTEM_PROMPT = """You are an advanced Memory Processing Agent responsible for analyzing conversations and extracting structured information with intelligent classification and conscious context detection.
 
@@ -136,8 +146,8 @@ Focus on extracting information that would genuinely help provide better context
         chat_id: str,
         user_input: str,
         ai_output: str,
-        context: Optional[ConversationContext] = None,
-        existing_memories: Optional[List[str]] = None,
+        context: ConversationContext | None = None,
+        existing_memories: list[str] | None = None,
     ) -> ProcessedLongTermMemory:
         """
         Async conversation processing with classification and conscious context detection
@@ -262,9 +272,9 @@ CONVERSATION CONTEXT:
     async def detect_duplicates(
         self,
         new_memory: ProcessedLongTermMemory,
-        existing_memories: List[ProcessedLongTermMemory],
+        existing_memories: list[ProcessedLongTermMemory],
         similarity_threshold: float = 0.8,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Detect if new memory is a duplicate of existing memories
 
@@ -470,7 +480,7 @@ CONVERSATION CONTEXT:
 }"""
 
     def _create_memory_from_dict(
-        self, data: Dict[str, Any], chat_id: str
+        self, data: dict[str, Any], chat_id: str
     ) -> ProcessedLongTermMemory:
         """
         Create ProcessedLongTermMemory from dictionary with proper validation and defaults
@@ -533,7 +543,7 @@ CONVERSATION CONTEXT:
             )
 
     def should_filter_memory(
-        self, memory: ProcessedLongTermMemory, filters: Optional[Dict[str, Any]] = None
+        self, memory: ProcessedLongTermMemory, filters: dict[str, Any] | None = None
     ) -> bool:
         """
         Determine if memory should be filtered out

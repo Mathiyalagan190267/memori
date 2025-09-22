@@ -4,10 +4,11 @@ Provides robust transaction handling with proper error recovery
 """
 
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -38,11 +39,11 @@ class TransactionOperation:
     """Represents a single database operation within a transaction"""
 
     query: str
-    params: Optional[List[Any]]
+    params: list[Any] | None
     operation_type: str  # 'select', 'insert', 'update', 'delete'
-    table: Optional[str] = None
-    expected_rows: Optional[int] = None  # For validation
-    rollback_query: Optional[str] = None  # Compensation query if needed
+    table: str | None = None
+    expected_rows: int | None = None  # For validation
+    rollback_query: str | None = None  # Compensation query if needed
 
 
 @dataclass
@@ -53,8 +54,8 @@ class TransactionResult:
     state: TransactionState
     operations_completed: int
     total_operations: int
-    error_message: Optional[str] = None
-    execution_time: Optional[float] = None
+    error_message: str | None = None
+    execution_time: float | None = None
     rollback_performed: bool = False
 
 
@@ -70,8 +71,8 @@ class TransactionManager:
     @contextmanager
     def transaction(
         self,
-        isolation_level: Optional[IsolationLevel] = None,
-        timeout: Optional[float] = 30.0,
+        isolation_level: IsolationLevel | None = None,
+        timeout: float | None = 30.0,
         readonly: bool = False,
     ):
         """Context manager for database transactions with proper error handling"""
@@ -154,8 +155,8 @@ class TransactionManager:
 
     def execute_atomic_operations(
         self,
-        operations: List[TransactionOperation],
-        isolation_level: Optional[IsolationLevel] = None,
+        operations: list[TransactionOperation],
+        isolation_level: IsolationLevel | None = None,
     ) -> TransactionResult:
         """Execute multiple operations atomically with validation"""
 
@@ -212,8 +213,8 @@ class TransactionManager:
     def execute_with_retry(
         self,
         operation: Callable[[], Any],
-        max_retries: Optional[int] = None,
-        retry_delay: Optional[float] = None,
+        max_retries: int | None = None,
+        retry_delay: float | None = None,
     ) -> Any:
         """Execute operation with automatic retry on transient failures"""
 
@@ -371,8 +372,8 @@ class TransactionContext:
         self.operations_count = 0
 
     def execute(
-        self, query: str, params: Optional[List[Any]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list[Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute query within the transaction context"""
         try:
             cursor = self.connection.cursor()
@@ -397,7 +398,7 @@ class TransactionContext:
                             if cursor.description
                             else []
                         )
-                        results.append(dict(zip(column_names, row)))
+                        results.append(dict(zip(column_names, row, strict=False)))
                 return results
             else:
                 # For non-SELECT queries, return affected row count
@@ -411,7 +412,7 @@ class TransactionContext:
         finally:
             self.operations_count += 1
 
-    def execute_many(self, query: str, params_list: List[List[Any]]) -> int:
+    def execute_many(self, query: str, params_list: list[list[Any]]) -> int:
         """Execute query with multiple parameter sets"""
         try:
             cursor = self.connection.cursor()
@@ -455,7 +456,7 @@ class SavepointManager:
         self.savepoint_counter = 0
 
     @contextmanager
-    def savepoint(self, name: Optional[str] = None):
+    def savepoint(self, name: str | None = None):
         """Create a savepoint within the current transaction"""
         if not name:
             name = f"sp_{self.savepoint_counter}"
@@ -508,7 +509,7 @@ def atomic_operation(connector):
 
 
 def bulk_insert_transaction(
-    connector, table: str, data: List[Dict[str, Any]], batch_size: int = 1000
+    connector, table: str, data: list[dict[str, Any]], batch_size: int = 1000
 ) -> TransactionResult:
     """Perform bulk insert with proper transaction management"""
     from .input_validator import DatabaseInputValidator

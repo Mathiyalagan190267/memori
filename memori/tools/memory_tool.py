@@ -3,7 +3,8 @@ Memory Tool - A tool/function for manual integration with any LLM library
 """
 
 import json
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 from loguru import logger
 
@@ -31,7 +32,7 @@ class MemoryTool:
         self.tool_name = "memori_memory"
         self.description = "Access and manage AI conversation memory"
 
-    def get_tool_schema(self) -> Dict[str, Any]:
+    def get_tool_schema(self) -> dict[str, Any]:
         """
         Get the tool schema for function calling in LLMs
 
@@ -240,7 +241,7 @@ class MemoryTool:
             )
             return f"Error searching memories: {str(e)}"
 
-    def _format_dict_to_string(self, result_dict: Dict[str, Any]) -> str:
+    def _format_dict_to_string(self, result_dict: dict[str, Any]) -> str:
         """Helper method to format dictionary results to readable strings"""
         if result_dict.get("error"):
             return f"Error: {result_dict['error']}"
@@ -287,7 +288,7 @@ class MemoryTool:
             message = result_dict.get("message", "Memory search completed")
             return message
 
-    def _record_conversation(self, **kwargs) -> Dict[str, Any]:
+    def _record_conversation(self, **kwargs) -> dict[str, Any]:
         """Record a conversation"""
         try:
             user_input = kwargs.get("user_input", "")
@@ -316,7 +317,7 @@ class MemoryTool:
             logger.error(f"Failed to record conversation: {e}")
             return {"error": f"Failed to record conversation: {str(e)}"}
 
-    def _retrieve_context(self, **kwargs) -> Dict[str, Any]:
+    def _retrieve_context(self, **kwargs) -> dict[str, Any]:
         """Retrieve relevant context for a query"""
         try:
             query = kwargs.get("query", "")
@@ -352,7 +353,7 @@ class MemoryTool:
             logger.error(f"Failed to retrieve context: {e}")
             return {"error": f"Failed to retrieve context: {str(e)}"}
 
-    def _search_memories(self, **kwargs) -> Dict[str, Any]:
+    def _search_memories(self, **kwargs) -> dict[str, Any]:
         """Search memories by content"""
         try:
             query = kwargs.get("query", "")
@@ -377,7 +378,7 @@ class MemoryTool:
             logger.error(f"Failed to search memories: {e}")
             return {"error": f"Failed to search memories: {str(e)}"}
 
-    def _get_stats(self, **kwargs) -> Dict[str, Any]:
+    def _get_stats(self, **kwargs) -> dict[str, Any]:
         """Get memory and integration statistics"""
         # kwargs can be used for future filtering options
         _ = kwargs  # Mark as intentionally unused
@@ -398,7 +399,7 @@ class MemoryTool:
             logger.error(f"Failed to get stats: {e}")
             return {"error": f"Failed to get stats: {str(e)}"}
 
-    def _get_essential_conversations(self, **kwargs) -> Dict[str, Any]:
+    def _get_essential_conversations(self, **kwargs) -> dict[str, Any]:
         """Get essential conversations from short-term memory"""
         try:
             limit = kwargs.get("limit", 10)
@@ -434,7 +435,7 @@ class MemoryTool:
             logger.error(f"Failed to get essential conversations: {e}")
             return {"error": f"Failed to get essential conversations: {str(e)}"}
 
-    def _trigger_analysis(self, **kwargs) -> Dict[str, Any]:
+    def _trigger_analysis(self, **kwargs) -> dict[str, Any]:
         """Trigger conscious agent analysis"""
         # kwargs can be used for future analysis options
         _ = kwargs  # Mark as intentionally unused

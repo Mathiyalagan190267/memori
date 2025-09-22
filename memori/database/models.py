@@ -4,7 +4,7 @@ Provides cross-database compatibility using SQLAlchemy ORM
 """
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -386,7 +386,7 @@ class DatabaseManager:
         """Get database session"""
         return self.SessionLocal()
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information"""
         return {
             "database_type": self.engine.dialect.name,

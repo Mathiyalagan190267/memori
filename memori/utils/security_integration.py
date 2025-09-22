@@ -3,7 +3,7 @@ Security Integration Module for Memori
 Integrates all security components into a unified system
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -29,10 +29,10 @@ class SecureMemoriDatabase:
         self,
         query_text: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
         use_fts: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute secure search with comprehensive validation"""
         try:
             # Phase 1: Input validation
@@ -96,8 +96,8 @@ class SecureMemoriDatabase:
             return []
 
     def secure_insert(
-        self, table: str, data: Dict[str, Any], on_conflict: str = "REPLACE"
-    ) -> Optional[str]:
+        self, table: str, data: dict[str, Any], on_conflict: str = "REPLACE"
+    ) -> str | None:
         """Execute secure insert with comprehensive validation"""
         try:
             # Phase 1: Input validation
@@ -135,7 +135,7 @@ class SecureMemoriDatabase:
             raise DatabaseError(f"Secure insert failed: {e}")
 
     def secure_update(
-        self, table: str, data: Dict[str, Any], where_conditions: Dict[str, Any]
+        self, table: str, data: dict[str, Any], where_conditions: dict[str, Any]
     ) -> int:
         """Execute secure update with comprehensive validation"""
         try:
@@ -188,7 +188,7 @@ class SecureMemoriDatabase:
             logger.error(f"Secure update failed: {e}")
             raise DatabaseError(f"Secure update failed: {e}")
 
-    def secure_delete(self, table: str, where_conditions: Dict[str, Any]) -> int:
+    def secure_delete(self, table: str, where_conditions: dict[str, Any]) -> int:
         """Execute secure delete with comprehensive validation"""
         try:
             # Phase 1: Input validation
@@ -235,7 +235,7 @@ class SecureMemoriDatabase:
             logger.error(f"Secure delete failed: {e}")
             raise DatabaseError(f"Secure delete failed: {e}")
 
-    def get_security_report(self) -> Dict[str, Any]:
+    def get_security_report(self) -> dict[str, Any]:
         """Get comprehensive security report"""
         audit_report = self.security_auditor.generate_audit_report()
 
@@ -279,7 +279,7 @@ def create_secure_database(connector, dialect: DatabaseDialect) -> SecureMemoriD
     return SecureMemoriDatabase(connector, dialect)
 
 
-def validate_memori_security_config() -> Dict[str, Any]:
+def validate_memori_security_config() -> dict[str, Any]:
     """Validate that all security components are properly configured"""
     validation_results = {
         "input_validator": False,

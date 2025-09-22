@@ -4,7 +4,7 @@ Data validation utilities for Memoriai
 
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any
 
 from .exceptions import ValidationError
 
@@ -103,7 +103,7 @@ class DataValidator:
     @classmethod
     def validate_file_path(
         cls,
-        value: Union[str, Path],
+        value: str | Path,
         field_name: str = "file path",
         must_exist: bool = False,
     ) -> Path:
@@ -123,7 +123,7 @@ class DataValidator:
     @classmethod
     def validate_json_dict(
         cls, value: Any, field_name: str = "JSON data"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Validate that value is a JSON-serializable dictionary"""
         if not isinstance(value, dict):
             raise ValidationError(f"{field_name} must be a dictionary")
@@ -256,7 +256,7 @@ class MemoryValidator:
     """Specialized validator for memory-related data"""
 
     @classmethod
-    def validate_memory_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_memory_data(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Validate complete memory data structure"""
         validated = {}
 
@@ -301,7 +301,7 @@ class MemoryValidator:
         return validated
 
     @classmethod
-    def validate_chat_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_chat_data(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Validate chat data structure"""
         validated = {}
 
