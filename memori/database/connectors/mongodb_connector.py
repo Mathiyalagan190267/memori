@@ -3,22 +3,35 @@ MongoDB connector for Memori
 Provides MongoDB-specific implementation of the database connector interface
 """
 
+from __future__ import annotations
+
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from loguru import logger
 
-try:
-    import pymongo  # noqa: F401
+if TYPE_CHECKING:
     from pymongo import MongoClient
     from pymongo.collection import Collection
     from pymongo.database import Database
+
+try:
+    import pymongo  # noqa: F401
+    from pymongo import MongoClient as _MongoClient
+    from pymongo.collection import Collection as _Collection
+    from pymongo.database import Database as _Database
     from pymongo.errors import ConnectionFailure, OperationFailure  # noqa: F401
 
     PYMONGO_AVAILABLE = True
+    MongoClient = _MongoClient
+    Collection = _Collection
+    Database = _Database
 except ImportError:
     PYMONGO_AVAILABLE = False
+    MongoClient = None  # type: ignore
+    Collection = None  # type: ignore
+    Database = None  # type: ignore
 
 from ...utils.exceptions import DatabaseError
 from .base_connector import BaseDatabaseConnector, DatabaseType
