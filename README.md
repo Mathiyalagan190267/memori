@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <i>Make LLMs context-aware with human-like memory, dual-mode retrieval, and automatic context injection.</i>
+  <i>From Postgres to MySQL, Memori plugs into the SQL databases you already use. Simple setup, infinite scale without new infrastructure.</i>
 </p>
 
 <p align="center">
