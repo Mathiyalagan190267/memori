@@ -11,7 +11,7 @@ def main():
 
     # Inline title with Gibson SVG logo
     try:
-        with open("./assets/gibson.svg", "r", encoding="utf-8") as gibson_file:
+        with open("./assets/gibson.svg", encoding="utf-8") as gibson_file:
             gibson_svg = gibson_file.read()
         import base64
 
