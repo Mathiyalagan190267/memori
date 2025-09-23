@@ -203,8 +203,8 @@ class LiteLLMCallbackManager:
             duration_ms = 0
             if start_time is not None and end_time is not None:
                 try:
-                    if isinstance(start_time, (int, float)) and isinstance(
-                        end_time, (int, float)
+                    if isinstance(start_time, int | float) and isinstance(
+                        end_time, int | float
                     ):
                         duration_ms = (end_time - start_time) * 1000
                 except Exception:

@@ -231,7 +231,7 @@ class MySQLSearchAdapter(BaseSearchAdapter):
                 current_settings = {}
                 if hasattr(cursor, "description") and cursor.description:
                     for row in settings:
-                        if isinstance(row, (list, tuple)) and len(row) >= 2:
+                        if isinstance(row, list | tuple) and len(row) >= 2:
                             current_settings[row[0]] = row[1]
 
                 logger.debug(f"Current MySQL FULLTEXT settings: {current_settings}")

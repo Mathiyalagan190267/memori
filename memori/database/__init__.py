@@ -7,7 +7,7 @@ try:
 
     MONGODB_AVAILABLE = True
 except ImportError:
-    MongoDBConnector = None
+    MongoDBConnector = None  # type: ignore
     MONGODB_AVAILABLE = False
 
 __all__ = ["SQLiteConnector", "PostgreSQLConnector", "MySQLConnector"]

@@ -5,6 +5,79 @@ All notable changes to Memori will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-09-22
+
+### 🚀 **MongoDB Integration Support**
+
+**Minor Release**: Added comprehensive MongoDB support as an alternative database backend alongside existing SQLite, PostgreSQL, and MySQL support.
+
+#### ✨ **New Database Backend**
+
+**🍃 MongoDB Support**
+- **Native MongoDB Integration**: Full support for MongoDB as a document-based memory storage backend
+- **Flexible Schema**: Leverages MongoDB's document model for flexible memory storage
+- **Production Ready**: Includes connection pooling, error handling, and performance optimizations
+- **Drop-in Replacement**: Seamless integration with existing Memori API
+
+#### 🔧 **Enhanced Database Architecture**
+
+**Multi-Database Support**
+```python
+# MongoDB connection
+memori = Memori(
+    database_connect="mongodb://localhost:27017/memori_db",
+    conscious_ingest=True,
+    openai_api_key="sk-..."
+)
+```
+
+**New Dependencies**
+- **PyMongo**: MongoDB driver for Python (`pymongo>=4.0.0`)
+- **Optional Installation**: Available as `pip install memorisdk[mongodb]`
+
+#### 🏗️ **Implementation Details**
+
+**MongoDB Connector**
+- **Connection Management**: Robust MongoDB connection handling with automatic reconnection
+- **Index Optimization**: Automatic index creation for search performance
+- **Document Schema**: Optimized document structure for memory storage and retrieval
+- **Query Optimization**: Efficient aggregation pipelines for memory search
+
+#### 📚 **Documentation & Examples**
+
+**New Examples**
+- **MongoDB Integration Examples**: Complete examples showcasing MongoDB backend usage
+- **Migration Guides**: Documentation for switching between database backends
+- **Configuration Examples**: MongoDB-specific configuration patterns
+
+#### 🎯 **Use Cases**
+
+**MongoDB Perfect For:**
+- **Document-based Storage**: Natural fit for flexible memory document storage
+- **Scalability Requirements**: High-performance applications requiring horizontal scaling
+- **Cloud Deployments**: Easy integration with MongoDB Atlas and cloud services
+- **JSON-native Applications**: Applications already using JSON/document paradigms
+
+#### 🛠️ **Developer Experience**
+
+**Enhanced Configuration**
+```json
+{
+  "database": {
+    "connect": "mongodb://localhost:27017/memori_db",
+    "options": {
+      "maxPoolSize": 10,
+      "serverSelectionTimeoutMS": 5000
+    }
+  }
+}
+```
+
+**Backward Compatibility**
+- **Existing Integrations**: All existing SQLite, PostgreSQL, and MySQL integrations remain unchanged
+- **API Consistency**: Same Memori API works across all database backends
+- **Migration Support**: Tools and documentation for database backend migration
+
 ## [1.2.0] - 2025-08-03
 
 ### 🚀 **Dual-Mode Memory System - Revolutionary Architecture**

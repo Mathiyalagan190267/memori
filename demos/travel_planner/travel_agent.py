@@ -6,7 +6,6 @@ Contains the CrewAI agents and tasks for travel planning with Memori integration
 import json
 import os
 from datetime import datetime
-from typing import List, Tuple
 
 import litellm
 
@@ -105,7 +104,7 @@ class TravelPlannerAgent:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize memory system: {str(e)}")
 
-    def create_travel_agents(self) -> Tuple[Agent, Agent, Agent]:
+    def create_travel_agents(self) -> tuple[Agent, Agent, Agent]:
         """Create the travel planning crew agents"""
 
         # Create SerperDevTool for web searching
@@ -178,8 +177,8 @@ class TravelPlannerAgent:
         return research_agent, planning_agent, budget_agent
 
     def create_travel_tasks(
-        self, agents: Tuple[Agent, Agent, Agent], travel_request: str
-    ) -> List[Task]:
+        self, agents: tuple[Agent, Agent, Agent], travel_request: str
+    ) -> list[Task]:
         """Create travel planning tasks"""
 
         research_agent, planning_agent, budget_agent = agents

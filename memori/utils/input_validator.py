@@ -40,7 +40,7 @@ class InputValidator:
     @classmethod
     def validate_and_sanitize_query(cls, query: str, max_length: int = 10000) -> str:
         """Validate and sanitize search query input"""
-        if not isinstance(query, (str, type(None))):
+        if not isinstance(query, str | type(None)):
             raise ValidationError("Query must be a string or None")
 
         if query is None:

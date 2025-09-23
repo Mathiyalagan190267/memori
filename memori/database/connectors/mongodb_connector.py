@@ -3,22 +3,35 @@ MongoDB connector for Memori
 Provides MongoDB-specific implementation of the database connector interface
 """
 
+from __future__ import annotations
+
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from loguru import logger
 
-try:
-    import pymongo
+if TYPE_CHECKING:
     from pymongo import MongoClient
     from pymongo.collection import Collection
     from pymongo.database import Database
-    from pymongo.errors import ConnectionFailure, OperationFailure
+
+try:
+    import pymongo  # noqa: F401
+    from pymongo import MongoClient as _MongoClient
+    from pymongo.collection import Collection as _Collection
+    from pymongo.database import Database as _Database
+    from pymongo.errors import ConnectionFailure, OperationFailure  # noqa: F401
 
     PYMONGO_AVAILABLE = True
+    MongoClient = _MongoClient
+    Collection = _Collection
+    Database = _Database
 except ImportError:
     PYMONGO_AVAILABLE = False
+    MongoClient = None  # type: ignore
+    Collection = None  # type: ignore
+    Database = None  # type: ignore
 
 from ...utils.exceptions import DatabaseError
 from .base_connector import BaseDatabaseConnector, DatabaseType
@@ -362,7 +375,7 @@ class MongoDBConnector(BaseDatabaseConnector):
 
             # Atlas typically includes specific modules or version patterns
             # This is a heuristic check - in production you might want to configure this explicitly
-            server_version = build_info.get("version", "")
+            build_info.get("version", "")
             modules = build_info.get("modules", [])
 
             # Check if vector search is available (Atlas feature)
@@ -416,19 +429,9 @@ class MongoDBConnector(BaseDatabaseConnector):
                     "Vector search is not supported in this MongoDB deployment"
                 )
 
-            collection = self.get_collection(collection_name)
+            self.get_collection(collection_name)
 
             # Vector search index specification for MongoDB Atlas
-            vector_index_spec = {
-                "fields": [
-                    {
-                        "path": vector_field,
-                        "type": "vector",
-                        "similarity": similarity,
-                        "dimensions": dimensions,
-                    }
-                ]
-            }
 
             index_name = index_name or f"{vector_field}_vector_index"
 

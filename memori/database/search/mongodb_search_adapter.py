@@ -8,8 +8,8 @@ from typing import Any
 from loguru import logger
 
 try:
-    import pymongo
-    from pymongo.collection import Collection
+    import pymongo  # noqa: F401
+    from pymongo.collection import Collection  # noqa: F401
     from pymongo.errors import OperationFailure
 
     PYMONGO_AVAILABLE = True
@@ -105,7 +105,10 @@ class MongoDBSearchAdapter(BaseSearchAdapter):
         for collection, memory_type in collections:
             try:
                 # Build search filter
-                search_filter = {"$text": {"$search": query}, "namespace": namespace}
+                search_filter: dict[str, Any] = {
+                    "$text": {"$search": query},
+                    "namespace": namespace,
+                }
 
                 if category_filter:
                     search_filter["category_primary"] = {"$in": category_filter}

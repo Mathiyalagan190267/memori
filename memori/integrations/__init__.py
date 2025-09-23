@@ -31,7 +31,7 @@ The universal system automatically detects and records ALL LLM providers
 without requiring wrapper classes or complex setup.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from loguru import logger
 

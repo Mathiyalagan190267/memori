@@ -9,7 +9,7 @@ try:
 
     MONGODB_SCHEMA_AVAILABLE = True
 except ImportError:
-    MongoDBSchemaGenerator = None
+    MongoDBSchemaGenerator = None  # type: ignore
     MONGODB_SCHEMA_AVAILABLE = False
 
 __all__ = ["MySQLSchemaGenerator"]

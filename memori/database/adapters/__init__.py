@@ -12,7 +12,7 @@ try:
 
     MONGODB_ADAPTER_AVAILABLE = True
 except ImportError:
-    MongoDBAdapter = None
+    MongoDBAdapter = None  # type: ignore
     MONGODB_ADAPTER_AVAILABLE = False
 
 __all__ = ["SQLiteSearchAdapter", "PostgreSQLSearchAdapter", "MySQLSearchAdapter"]

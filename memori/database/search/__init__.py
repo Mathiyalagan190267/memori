@@ -10,7 +10,7 @@ try:
 
     MONGODB_SEARCH_AVAILABLE = True
 except ImportError:
-    MongoDBSearchAdapter = None
+    MongoDBSearchAdapter = None  # type: ignore
     MONGODB_SEARCH_AVAILABLE = False
 
 __all__ = ["SQLiteSearchAdapter", "MySQLSearchAdapter"]
