@@ -24,9 +24,9 @@ try:
     from pymongo.errors import ConnectionFailure, OperationFailure  # noqa: F401
 
     PYMONGO_AVAILABLE = True
-    MongoClient = _MongoClient
-    Collection = _Collection
-    Database = _Database
+    MongoClient = _MongoClient  # type: ignore
+    Collection = _Collection  # type: ignore
+    Database = _Database  # type: ignore
 except ImportError:
     PYMONGO_AVAILABLE = False
     MongoClient = None  # type: ignore
@@ -72,21 +72,86 @@ class MongoDBConnector(BaseDatabaseConnector):
     def _parse_connection_string(self):
         """Parse MongoDB connection string to extract components"""
         try:
-            parsed = urlparse(self.connection_string)
-            self.host = parsed.hostname or "localhost"
-            self.port = parsed.port or 27017
-            self.database_name = parsed.path.lstrip("/") or "memori"
-            self.username = parsed.username
-            self.password = parsed.password
+            # Handle MongoDB connection strings properly (including replica sets)
+            if self.connection_string.startswith(
+                "mongodb://"
+            ) or self.connection_string.startswith("mongodb+srv://"):
+                # For MongoDB URIs, extract database name and basic info for logging
+                # but let pymongo handle the full parsing
+                if "?" in self.connection_string:
+                    uri_part, query_part = self.connection_string.split("?", 1)
+                else:
+                    uri_part, query_part = self.connection_string, ""
 
-            # Extract query parameters
-            self.options = {}
-            if parsed.query:
-                params = parsed.query.split("&")
-                for param in params:
-                    if "=" in param:
-                        key, value = param.split("=", 1)
-                        self.options[key] = value
+                # Extract database name from path
+                if "/" in uri_part:
+                    path_part = uri_part.split("/")[-1]
+                    self.database_name = path_part if path_part else "memori"
+                else:
+                    self.database_name = "memori"
+
+                # Extract host info for logging
+                is_srv_uri = self.connection_string.startswith("mongodb+srv://")
+
+                if is_srv_uri:
+                    # For SRV URIs, extract the service hostname
+                    if "@" in uri_part:
+                        srv_host = uri_part.split("@")[1].split("/")[0].split("?")[0]
+                    else:
+                        srv_host = (
+                            uri_part.replace("mongodb+srv://", "")
+                            .split("/")[0]
+                            .split("?")[0]
+                        )
+                    self.host = srv_host
+                    self.port = (
+                        27017  # SRV uses default port, actual ports resolved via DNS
+                    )
+                else:
+                    # Regular mongodb:// URI parsing
+                    if "@" in uri_part:
+                        host_part = uri_part.split("@")[1]
+                    else:
+                        host_part = uri_part.replace("mongodb://", "")
+
+                    # Get first host for logging purposes
+                    if "," in host_part:
+                        first_host = host_part.split(",")[0].split("/")[0]
+                    else:
+                        first_host = host_part.split("/")[0]
+
+                    if ":" in first_host:
+                        self.host, port_str = first_host.split(":", 1)
+                        try:
+                            self.port = int(port_str)
+                        except ValueError:
+                            self.port = 27017
+                    else:
+                        self.host = first_host
+                        self.port = 27017
+
+                # Extract auth info
+                parsed = urlparse(self.connection_string)
+                self.username = parsed.username
+                self.password = parsed.password
+
+                # Extract query parameters
+                self.options = {}
+                if query_part:
+                    params = query_part.split("&")
+                    for param in params:
+                        if "=" in param:
+                            key, value = param.split("=", 1)
+                            self.options[key] = value
+            else:
+                # Fall back to urlparse for simple connection strings
+                parsed = urlparse(self.connection_string)
+                self.host = parsed.hostname or "localhost"
+                self.port = parsed.port or 27017
+                self.database_name = parsed.path.lstrip("/") or "memori"
+                self.username = parsed.username
+                self.password = parsed.password
+                self.options = {}
 
         except Exception as e:
             logger.warning(f"Failed to parse MongoDB connection string: {e}")
@@ -99,7 +164,7 @@ class MongoDBConnector(BaseDatabaseConnector):
             self.options = {}
 
     def get_connection(self) -> MongoClient:
-        """Get MongoDB client connection"""
+        """Get MongoDB client connection with support for mongodb+srv DNS seedlist"""
         if self.client is None:
             try:
                 # Create MongoDB client with appropriate options
@@ -111,14 +176,76 @@ class MongoDBConnector(BaseDatabaseConnector):
                     "retryWrites": True,  # Enable retryable writes
                 }
 
-                # Add any additional options from connection string
+                # Special handling for mongodb+srv URIs
+                is_srv_uri = self.connection_string.startswith("mongodb+srv://")
+
+                if is_srv_uri:
+                    # For mongodb+srv URIs, TLS is automatically enabled
+                    # Don't set directConnection for SRV URIs as they use DNS seedlist discovery
+                    logger.info(
+                        "Using MongoDB Atlas DNS seedlist discovery (mongodb+srv)"
+                    )
+
+                    # Add modern SRV-specific options for 2025
+                    srv_options = {
+                        "srvMaxHosts": 0,  # No limit on SRV hosts (default)
+                        "srvServiceName": "mongodb",  # Default service name
+                    }
+                    client_options.update(srv_options)
+                else:
+                    # For standard mongodb:// URIs
+                    # Handle replica sets vs single hosts
+                    if "replicaSet" in self.options:
+                        logger.info("Using MongoDB replica set connection")
+                    elif "," in self.connection_string:
+                        logger.info("Using MongoDB multiple host connection")
+                    else:
+                        logger.info("Using MongoDB single host connection")
+
+                # Add any additional options from connection string (these override defaults)
                 client_options.update(self.options)
 
+                # Never set directConnection for SRV URIs or replica sets
+                if is_srv_uri or "replicaSet" in self.options:
+                    client_options.pop("directConnection", None)
+
+                logger.debug(f"MongoDB connection options: {client_options}")
                 self.client = MongoClient(self.connection_string, **client_options)
 
-                # Test connection
+                # Test connection with more detailed logging
                 self.client.admin.command("ping")
-                logger.info(f"Connected to MongoDB at {self.host}:{self.port}")
+
+                # Get server info for better logging
+                try:
+                    server_info = self.client.server_info()
+                    version = server_info.get("version", "unknown")
+                    logger.info(
+                        f"Connected to MongoDB {version} at {self.host}:{self.port}"
+                    )
+
+                    if is_srv_uri:
+                        # Log DNS-resolved hosts for SRV connections
+                        topology = self.client.topology_description
+                        hosts = []
+                        for server in topology.server_descriptions():
+                            if hasattr(server, "address") and server.address:
+                                if (
+                                    isinstance(server.address, tuple)
+                                    and len(server.address) >= 2
+                                ):
+                                    hosts.append(
+                                        f"{server.address[0]}:{server.address[1]}"
+                                    )
+                                else:
+                                    hosts.append(str(server.address))
+
+                        if hosts:
+                            logger.info(f"DNS resolved hosts: {', '.join(hosts)}")
+                        else:
+                            logger.info("DNS seedlist discovery completed successfully")
+                except Exception as e:
+                    logger.warning(f"Could not get server info: {e}")
+                    logger.info(f"Connected to MongoDB at {self.host}:{self.port}")
 
             except Exception as e:
                 raise DatabaseError(f"Failed to connect to MongoDB: {e}")

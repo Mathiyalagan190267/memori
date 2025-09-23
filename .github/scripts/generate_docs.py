@@ -20,51 +20,63 @@ import yaml
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO')),
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO")),
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Config:
     """Configuration class with environment-based settings"""
-    max_retries: int = int(os.getenv('MAX_RETRIES', '3'))
-    retry_delay_base: int = int(os.getenv('RETRY_DELAY_BASE', '2'))
-    api_timeout: int = int(os.getenv('API_TIMEOUT', '300'))
-    rate_limit_delay: int = int(os.getenv('RATE_LIMIT_DELAY', '1'))
-    batch_size: int = int(os.getenv('BATCH_SIZE', '5'))
-    max_concurrent: int = int(os.getenv('MAX_CONCURRENT', '3'))
-    max_sample_docs: int = int(os.getenv('MAX_SAMPLE_DOCS', '3'))
-    max_tokens: int = int(os.getenv('MAX_TOKENS', '8000'))
-    temperature: float = float(os.getenv('TEMPERATURE', '0.1'))
+
+    max_retries: int = int(os.getenv("MAX_RETRIES", "3"))
+    retry_delay_base: int = int(os.getenv("RETRY_DELAY_BASE", "2"))
+    api_timeout: int = int(os.getenv("API_TIMEOUT", "300"))
+    rate_limit_delay: int = int(os.getenv("RATE_LIMIT_DELAY", "1"))
+    batch_size: int = int(os.getenv("BATCH_SIZE", "5"))
+    max_concurrent: int = int(os.getenv("MAX_CONCURRENT", "3"))
+    max_sample_docs: int = int(os.getenv("MAX_SAMPLE_DOCS", "3"))
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "8000"))
+    temperature: float = float(os.getenv("TEMPERATURE", "0.1"))
+
 
 config = Config()
 
+
 class DocumentationError(Exception):
     """Custom exception for documentation generation errors"""
+
     pass
+
 
 class RateLimitError(Exception):
     """Custom exception for rate limiting errors"""
+
     pass
+
 
 class ValidationError(Exception):
     """Custom exception for validation errors"""
+
     pass
+
 
 def validate_api_key(api_key: str) -> bool:
     """Validate Anthropic API key format"""
     try:
         if not api_key or len(api_key) < 10:
             return False
-        return api_key.startswith('sk-ant-')
+        return api_key.startswith("sk-ant-")
     except Exception:
         return False
 
+
 def exponential_backoff(attempt: int, base_delay: int = 2) -> float:
     """Calculate exponential backoff delay"""
-    return min(base_delay ** attempt, 60)  # Cap at 60 seconds
+    return min(base_delay**attempt, 60)  # Cap at 60 seconds
+
 
 def safe_file_operation(operation, *args, **kwargs):
     """Wrapper for safe file operations with error handling"""
@@ -73,6 +85,7 @@ def safe_file_operation(operation, *args, **kwargs):
     except Exception as e:
         logger.error(f"File operation failed: {e}")
         return None, str(e)
+
 
 def read_file_content(file_path: str) -> tuple[str | None, str | None]:
     """Read file content safely with comprehensive error handling"""
@@ -88,7 +101,7 @@ def read_file_content(file_path: str) -> tuple[str | None, str | None]:
         if path.stat().st_size > 1024 * 1024:
             return None, f"File too large (>1MB): {file_path}"
 
-        with open(path, encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
 
         if not content.strip():
@@ -103,6 +116,7 @@ def read_file_content(file_path: str) -> tuple[str | None, str | None]:
     except Exception as e:
         return None, f"Unexpected error reading {file_path}: {str(e)}"
 
+
 def write_file_content(file_path: str, content: str) -> tuple[bool, str | None]:
     """Write file content safely with atomic operations"""
     try:
@@ -113,10 +127,7 @@ def write_file_content(file_path: str, content: str) -> tuple[bool, str | None]:
 
         # Write to temporary file first (atomic operation)
         with tempfile.NamedTemporaryFile(
-            mode='w',
-            encoding='utf-8',
-            dir=path.parent,
-            delete=False
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
         ) as tmp_file:
             tmp_file.write(content)
             tmp_path = tmp_file.name
@@ -132,36 +143,38 @@ def write_file_content(file_path: str, content: str) -> tuple[bool, str | None]:
         logger.error(error_msg)
         return False, error_msg
 
+
 def get_framework_name(file_path: str) -> str:
     """Extract framework name from file path with validation"""
     try:
         path = Path(file_path)
 
-        if 'integrations/' in file_path:
+        if "integrations/" in file_path:
             filename = path.stem
             # Remove common suffixes
-            for suffix in ['_example', '_integration', '_demo']:
-                filename = filename.replace(suffix, '')
+            for suffix in ["_example", "_integration", "_demo"]:
+                filename = filename.replace(suffix, "")
             return filename.lower()
         else:
             # For non-integration examples
             filename = path.stem
-            return filename.replace('_', '-').lower()
+            return filename.replace("_", "-").lower()
     except Exception as e:
         logger.warning(f"Error extracting framework name from {file_path}: {e}")
-        return 'unknown'
+        return "unknown"
+
 
 def get_existing_docs() -> dict[str, str]:
     """Get existing documentation patterns with error handling"""
     existing_docs = {}
-    docs_dir = Path('docs/examples')
+    docs_dir = Path("docs/examples")
 
     if not docs_dir.exists():
         logger.warning("docs/examples directory does not exist")
         return existing_docs
 
     try:
-        for doc_file in docs_dir.glob('*.md'):
+        for doc_file in docs_dir.glob("*.md"):
             content, error = read_file_content(doc_file)
             if content and not error:
                 existing_docs[doc_file.name] = content
@@ -175,6 +188,7 @@ def get_existing_docs() -> dict[str, str]:
         logger.error(f"Error loading existing docs: {e}")
         return existing_docs
 
+
 def create_claude_client(api_key: str):
     """Create Anthropic client with validation"""
     try:
@@ -182,6 +196,7 @@ def create_claude_client(api_key: str):
             raise ValidationError("Invalid API key format")
 
         from anthropic import Anthropic
+
         client = Anthropic(api_key=api_key)
         return client, None
 
@@ -190,16 +205,17 @@ def create_claude_client(api_key: str):
     except Exception as e:
         return None, f"Failed to create Claude client: {str(e)}"
 
+
 def create_documentation_with_retry(
-    client,
-    example_file: str,
-    existing_docs: dict[str, str]
+    client, example_file: str, existing_docs: dict[str, str]
 ) -> tuple[str | None, str | None]:
     """Generate documentation with retry logic and rate limiting"""
 
     for attempt in range(config.max_retries):
         try:
-            logger.info(f"Generating documentation for {example_file} (attempt {attempt + 1})")
+            logger.info(
+                f"Generating documentation for {example_file} (attempt {attempt + 1})"
+            )
 
             # Read the example file
             example_content, error = read_file_content(example_file)
@@ -212,7 +228,9 @@ def create_documentation_with_retry(
             sample_docs = ""
             if existing_docs:
                 sample_count = 0
-                for doc_name, doc_content in list(existing_docs.items())[:config.max_sample_docs]:
+                for doc_name, doc_content in list(existing_docs.items())[
+                    : config.max_sample_docs
+                ]:
                     # Truncate content to prevent token limit issues
                     truncated_content = doc_content[:3000]
                     sample_docs += f"\n\n--- Sample Documentation ({doc_name}) ---\n{truncated_content}...\n"
@@ -277,7 +295,7 @@ Generate production-ready documentation for: docs/examples/{framework_name}-inte
                 temperature=config.temperature,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
-                timeout=config.api_timeout
+                timeout=config.api_timeout,
             )
 
             if response and response.content:
@@ -293,12 +311,16 @@ Generate production-ready documentation for: docs/examples/{framework_name}-inte
 
         except Exception as e:
             error_msg = str(e)
-            logger.warning(f"Attempt {attempt + 1} failed for {example_file}: {error_msg}")
+            logger.warning(
+                f"Attempt {attempt + 1} failed for {example_file}: {error_msg}"
+            )
 
             # Check for rate limiting
             if "rate_limit" in error_msg.lower() or "429" in error_msg:
                 if attempt < config.max_retries - 1:
-                    delay = exponential_backoff(attempt + 1, config.retry_delay_base * 2)
+                    delay = exponential_backoff(
+                        attempt + 1, config.retry_delay_base * 2
+                    )
                     logger.info(f"Rate limited, waiting {delay}s before retry...")
                     time.sleep(delay)
                     continue
@@ -315,10 +337,11 @@ Generate production-ready documentation for: docs/examples/{framework_name}-inte
 
     return None, "Maximum retries exceeded"
 
+
 def update_mkdocs_nav_safe(new_docs: dict[str, str]) -> tuple[bool, str | None]:
     """Update mkdocs.yml navigation with comprehensive error handling and rollback"""
-    mkdocs_path = 'mkdocs.yml'
-    backup_path = f'{mkdocs_path}.backup'
+    mkdocs_path = "mkdocs.yml"
+    backup_path = f"{mkdocs_path}.backup"
 
     try:
         # Create backup first
@@ -327,25 +350,25 @@ def update_mkdocs_nav_safe(new_docs: dict[str, str]) -> tuple[bool, str | None]:
             logger.info(f"Created backup: {backup_path}")
 
         # Read current config with full YAML support for Python object references
-        with open(mkdocs_path, encoding='utf-8') as f:
+        with open(mkdocs_path, encoding="utf-8") as f:
             mkdocs_config = yaml.load(f, Loader=yaml.FullLoader)
 
-        if not mkdocs_config or 'nav' not in mkdocs_config:
+        if not mkdocs_config or "nav" not in mkdocs_config:
             return False, "Invalid mkdocs.yml structure"
 
         # Find Examples section
-        nav = mkdocs_config.get('nav', [])
+        nav = mkdocs_config.get("nav", [])
         examples_section = None
 
         for _i, section in enumerate(nav):
-            if isinstance(section, dict) and 'Examples' in section:
-                examples_section = section['Examples']
+            if isinstance(section, dict) and "Examples" in section:
+                examples_section = section["Examples"]
                 break
 
         if examples_section is None:
             # Create Examples section if it doesn't exist
             examples_section = []
-            nav.append({'Examples': examples_section})
+            nav.append({"Examples": examples_section})
             logger.info("Created new Examples section in navigation")
 
         # Add new documentation entries
@@ -374,13 +397,16 @@ def update_mkdocs_nav_safe(new_docs: dict[str, str]) -> tuple[bool, str | None]:
             return True, None
 
         # Write updated config with atomic operation using full dumper to preserve Python references
-        success, error = write_file_content(mkdocs_path, yaml.dump(
-            mkdocs_config,
-            default_flow_style=False,
-            sort_keys=False,
-            allow_unicode=True,
-            Dumper=yaml.Dumper
-        ))
+        success, error = write_file_content(
+            mkdocs_path,
+            yaml.dump(
+                mkdocs_config,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+                Dumper=yaml.Dumper,
+            ),
+        )
 
         if success:
             logger.info(f"Updated mkdocs.yml with {added_count} new entries")
@@ -408,7 +434,10 @@ def update_mkdocs_nav_safe(new_docs: dict[str, str]) -> tuple[bool, str | None]:
 
         return False, error_msg
 
-def process_files_in_batches(changed_files: list[str], client, existing_docs: dict[str, str]):
+
+def process_files_in_batches(
+    changed_files: list[str], client, existing_docs: dict[str, str]
+):
     """Process files in batches with comprehensive error handling"""
 
     # Filter and validate files
@@ -417,7 +446,7 @@ def process_files_in_batches(changed_files: list[str], client, existing_docs: di
         if not file_path.strip():
             continue
 
-        if not file_path.endswith('.py'):
+        if not file_path.endswith(".py"):
             logger.info(f"Skipping non-Python file: {file_path}")
             continue
 
@@ -430,14 +459,16 @@ def process_files_in_batches(changed_files: list[str], client, existing_docs: di
         logger.info("No valid Python files to process")
         return {}, []
 
-    logger.info(f"Processing {len(valid_files)} valid files in batches of {config.batch_size}")
+    logger.info(
+        f"Processing {len(valid_files)} valid files in batches of {config.batch_size}"
+    )
 
     new_docs_generated = {}
     processing_errors = []
 
     # Process in batches
     for i in range(0, len(valid_files), config.batch_size):
-        batch = valid_files[i:i + config.batch_size]
+        batch = valid_files[i : i + config.batch_size]
         batch_num = (i // config.batch_size) + 1
         total_batches = (len(valid_files) + config.batch_size - 1) // config.batch_size
 
@@ -446,16 +477,22 @@ def process_files_in_batches(changed_files: list[str], client, existing_docs: di
         for file_path in batch:
             try:
                 framework_name = get_framework_name(file_path)
-                logger.info(f"Generating documentation for {framework_name} ({file_path})")
+                logger.info(
+                    f"Generating documentation for {framework_name} ({file_path})"
+                )
 
                 # Generate documentation
-                doc_content, error = create_documentation_with_retry(client, file_path, existing_docs)
+                doc_content, error = create_documentation_with_retry(
+                    client, file_path, existing_docs
+                )
 
                 if doc_content and not error:
                     # Save documentation file
                     doc_file_path = f"docs/examples/{framework_name}-integration.md"
 
-                    success, write_error = write_file_content(doc_file_path, doc_content)
+                    success, write_error = write_file_content(
+                        doc_file_path, doc_content
+                    )
                     if success:
                         logger.info(f"Generated documentation: {doc_file_path}")
                         new_docs_generated[framework_name] = doc_file_path
@@ -464,7 +501,9 @@ def process_files_in_batches(changed_files: list[str], client, existing_docs: di
                         logger.error(error_msg)
                         processing_errors.append(error_msg)
                 else:
-                    error_msg = f"Failed to generate documentation for {file_path}: {error}"
+                    error_msg = (
+                        f"Failed to generate documentation for {file_path}: {error}"
+                    )
                     logger.error(error_msg)
                     processing_errors.append(error_msg)
 
@@ -484,6 +523,7 @@ def process_files_in_batches(changed_files: list[str], client, existing_docs: di
 
     return new_docs_generated, processing_errors
 
+
 def main():
     """Main execution with comprehensive error handling and monitoring"""
     start_time = datetime.now()
@@ -491,29 +531,33 @@ def main():
 
     try:
         # Validate environment
-        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValidationError("ANTHROPIC_API_KEY environment variable not set")
 
         # Get changed files
-        changed_files_str = os.environ.get('CHANGED_FILES', '')
+        changed_files_str = os.environ.get("CHANGED_FILES", "")
         if not changed_files_str.strip():
             logger.info("No changed files provided")
             return
 
-        changed_files = [f.strip() for f in changed_files_str.split('\n') if f.strip()]
+        changed_files = [f.strip() for f in changed_files_str.split("\n") if f.strip()]
         logger.info(f"Processing {len(changed_files)} changed files")
 
         # Create Claude client
         client, client_error = create_claude_client(api_key)
         if not client or client_error:
-            raise DocumentationError(f"Failed to initialize Claude client: {client_error}")
+            raise DocumentationError(
+                f"Failed to initialize Claude client: {client_error}"
+            )
 
         logger.info("Claude client initialized successfully")
 
         # Get existing documentation patterns
         existing_docs = get_existing_docs()
-        logger.info(f"Loaded {len(existing_docs)} existing documentation files for pattern matching")
+        logger.info(
+            f"Loaded {len(existing_docs)} existing documentation files for pattern matching"
+        )
 
         # Process files in batches
         new_docs_generated, processing_errors = process_files_in_batches(
@@ -530,7 +574,9 @@ def main():
 
         # Update navigation if docs were generated
         if new_docs_generated:
-            logger.info(f"Updating navigation for {len(new_docs_generated)} new documentation files")
+            logger.info(
+                f"Updating navigation for {len(new_docs_generated)} new documentation files"
+            )
 
             nav_success, nav_error = update_mkdocs_nav_safe(new_docs_generated)
             if nav_success:
@@ -542,7 +588,9 @@ def main():
             # Final success report
             duration = datetime.now() - start_time
             logger.info(f"\nDocumentation generation completed in {duration}")
-            logger.info(f"Successfully generated {len(new_docs_generated)} documentation files:")
+            logger.info(
+                f"Successfully generated {len(new_docs_generated)} documentation files:"
+            )
             for framework, path in new_docs_generated.items():
                 logger.info(f"  {framework}: {path}")
 
@@ -563,19 +611,20 @@ def main():
 
         # Create error summary
         error_summary = {
-            'error': str(e),
-            'duration': str(duration),
-            'timestamp': datetime.now().isoformat()
+            "error": str(e),
+            "duration": str(duration),
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Save error details for debugging
         try:
-            with open('.github/last-error.json', 'w') as f:
+            with open(".github/last-error.json", "w") as f:
                 json.dump(error_summary, f, indent=2)
         except:
             pass  # Don't fail on error logging failure
 
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
