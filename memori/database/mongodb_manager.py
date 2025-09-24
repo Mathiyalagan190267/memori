@@ -31,9 +31,9 @@ try:
     )
 
     PYMONGO_AVAILABLE = True
-    MongoClient = _MongoClient
-    Collection = _Collection
-    Database = _Database
+    MongoClient = _MongoClient  # type: ignore
+    Collection = _Collection  # type: ignore
+    Database = _Database  # type: ignore
 except ImportError:
     PYMONGO_AVAILABLE = False
     MongoClient = None  # type: ignore
@@ -92,20 +92,27 @@ class MongoDBDatabaseManager:
             # Handle both mongodb:// and mongodb+srv:// schemes
             parsed = urlparse(self.database_connect)
 
-            # Extract host - ensure it's a proper hostname/IP
+            # Extract host - handle SRV URIs differently
             hostname = parsed.hostname
-            if hostname and hostname != "localhost":
-                # Check if it's a valid hostname/IP, if not fall back to localhost
-                import socket
+            is_srv_uri = self.database_connect.startswith("mongodb+srv://")
 
-                try:
-                    socket.gethostbyname(hostname)
+            if hostname and hostname != "localhost":
+                if is_srv_uri:
+                    # For SRV URIs, don't try to resolve hostname directly
+                    # PyMongo will handle SRV resolution internally
                     self.host = hostname
-                except socket.gaierror:
-                    logger.warning(
-                        f"Cannot resolve hostname '{hostname}', falling back to localhost"
-                    )
-                    self.host = "localhost"
+                else:
+                    # For regular mongodb:// URIs, check hostname resolution
+                    import socket
+
+                    try:
+                        socket.gethostbyname(hostname)
+                        self.host = hostname
+                    except socket.gaierror:
+                        logger.warning(
+                            f"Cannot resolve hostname '{hostname}', falling back to localhost"
+                        )
+                        self.host = "localhost"
             else:
                 self.host = hostname or "localhost"
 
@@ -138,7 +145,7 @@ class MongoDBDatabaseManager:
             self.options = {}
 
     def _get_client(self) -> MongoClient:
-        """Get MongoDB client connection with caching and fallbacks"""
+        """Get MongoDB client connection with support for mongodb+srv DNS seedlist"""
         if self.client is None:
             try:
                 # Create MongoDB client with appropriate options
@@ -148,33 +155,108 @@ class MongoDBDatabaseManager:
                     "socketTimeoutMS": 10000,  # 10 second socket timeout
                     "maxPoolSize": 50,  # Connection pool size
                     "retryWrites": True,  # Enable retryable writes
-                    "directConnection": True,  # Direct connection to avoid replica set issues
                 }
 
-                # Add any additional options from connection string
-                client_options.update(self.options)
+                # Check if this is a mongodb+srv URI for DNS seedlist discovery
+                is_srv_uri = self.database_connect.startswith("mongodb+srv://")
 
-                # Try original connection string first
-                try:
-                    self.client = MongoClient(self.database_connect, **client_options)
-                    # Test connection
-                    self.client.admin.command("ping")
-                    logger.info("Connected to MongoDB using original connection string")
-                except Exception as original_error:
-                    logger.warning(f"Original connection failed: {original_error}")
-
-                    # Try fallback with explicit host:port
-                    fallback_uri = (
-                        f"mongodb://{self.host}:{self.port}/{self.database_name}"
-                    )
-                    logger.info(f"Trying fallback connection: {fallback_uri}")
-
-                    self.client = MongoClient(fallback_uri, **client_options)
-                    # Test connection
-                    self.client.admin.command("ping")
+                if is_srv_uri:
                     logger.info(
-                        f"Connected to MongoDB at {self.host}:{self.port}/{self.database_name}"
+                        "Using MongoDB Atlas DNS seedlist discovery (mongodb+srv)"
                     )
+
+                    # Add modern SRV-specific options for 2025
+                    srv_options = {
+                        "srvMaxHosts": 0,  # No limit on SRV hosts (default)
+                        "srvServiceName": "mongodb",  # Default service name
+                    }
+                    client_options.update(srv_options)
+
+                    # For SRV URIs, don't use fallback - they handle discovery automatically
+                    # Add any additional options from connection string (these override defaults)
+                    client_options.update(self.options)
+
+                    # Never set directConnection for SRV URIs
+                    client_options.pop("directConnection", None)
+
+                    logger.debug(f"MongoDB+SRV connection options: {client_options}")
+                    self.client = MongoClient(self.database_connect, **client_options)
+
+                    # Test connection
+                    self.client.admin.command("ping")
+
+                    # Get server info and DNS-resolved hosts for better logging
+                    try:
+                        server_info = self.client.server_info()
+                        version = server_info.get("version", "unknown")
+                        logger.info(f"Connected to MongoDB Atlas {version}")
+
+                        # Log DNS-resolved hosts for SRV connections
+                        try:
+                            topology = self.client.topology_description
+                            hosts = []
+                            for server in topology.server_descriptions():
+                                try:
+                                    if hasattr(server, "address") and server.address:
+                                        if (
+                                            isinstance(server.address, tuple)
+                                            and len(server.address) >= 2
+                                        ):
+                                            hosts.append(
+                                                f"{server.address[0]}:{server.address[1]}"
+                                            )
+                                        else:
+                                            hosts.append(str(server.address))
+                                except AttributeError:
+                                    # Some server descriptions might not have address attribute
+                                    continue
+
+                            if hosts:
+                                logger.info(
+                                    f"DNS resolved MongoDB Atlas hosts: {', '.join(hosts)}"
+                                )
+                            else:
+                                logger.info(
+                                    "MongoDB Atlas DNS seedlist discovery completed successfully"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"Could not get Atlas server topology info: {e}"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Could not get Atlas server info: {e}")
+                        logger.info("Connected to MongoDB Atlas successfully")
+
+                else:
+                    # Legacy mongodb:// URI handling with fallbacks
+                    # Add any additional options from connection string
+                    client_options.update(self.options)
+
+                    # Try original connection string first
+                    try:
+                        self.client = MongoClient(
+                            self.database_connect, **client_options
+                        )
+                        # Test connection
+                        self.client.admin.command("ping")
+                        logger.info(
+                            "Connected to MongoDB using original connection string"
+                        )
+                    except Exception as original_error:
+                        logger.warning(f"Original connection failed: {original_error}")
+
+                        # Try fallback with explicit host:port (only for non-SRV URIs)
+                        fallback_uri = (
+                            f"mongodb://{self.host}:{self.port}/{self.database_name}"
+                        )
+                        logger.info(f"Trying fallback connection: {fallback_uri}")
+
+                        self.client = MongoClient(fallback_uri, **client_options)
+                        # Test connection
+                        self.client.admin.command("ping")
+                        logger.info(
+                            f"Connected to MongoDB at {self.host}:{self.port}/{self.database_name}"
+                        )
 
             except Exception as e:
                 error_msg = f"Failed to connect to MongoDB: {e}"

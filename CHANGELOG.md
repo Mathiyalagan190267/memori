@@ -5,6 +5,26 @@ All notable changes to Memori will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2025-09-23
+
+### 🐛 **Bug Fixes**
+
+**Patch Release**: Fixed hostname resolution issues with MongoDB Atlas connections using modern mongodb+srv:// format.
+
+#### 🔧 **MongoDB Atlas Connection Fixes**
+- **Fixed DNS Resolution Warnings**: Resolved hostname resolution warnings when connecting to MongoDB Atlas using mongodb+srv:// URIs
+- **Improved SRV URI Parsing**: Enhanced connection string parsing logic to properly handle DNS seedlist discovery
+- **Better Error Handling**: Added proper exception handling for server topology inspection
+- **Type Safety**: Fixed MyPy type checking errors for conditional MongoDB imports
+
+#### 🔧 **Technical Improvements**
+- Fixed hostname parsing logic in `mongodb_connector.py` and `mongodb_manager.py`
+- Added proper SRV URI detection to skip unnecessary DNS resolution attempts
+- Enhanced error handling for server descriptions without address attributes
+- Improved conditional import patterns for optional MongoDB dependencies
+
+---
+
 ## [2.1.0] - 2025-09-22
 
 ### 🚀 **MongoDB Integration Support**

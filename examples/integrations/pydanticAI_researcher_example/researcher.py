@@ -1,12 +1,12 @@
+import os
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
 
-from pydantic_ai import Agent, RunContext, Tool
-from pydantic import BaseModel
-from linkup import LinkupClient
 from dotenv import load_dotenv
-import os
+from linkup import LinkupClient
+from pydantic import BaseModel
+from pydantic_ai import Agent, RunContext, Tool
 
 from memori import Memori, create_memory_tool
 
