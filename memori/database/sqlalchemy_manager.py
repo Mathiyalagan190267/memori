@@ -348,24 +348,40 @@ class SQLAlchemyDatabaseManager:
     def _setup_mysql_fulltext(self, conn):
         """Setup MySQL FULLTEXT indexes"""
         try:
-            # Create FULLTEXT indexes
-            conn.execute(
-                text(
-                    "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
-                )
+            # Check if indexes exist before creating them
+            index_check_query = text(
+                """
+                SELECT COUNT(*) as index_count
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                AND index_name IN ('ft_short_term_search', 'ft_long_term_search')
+            """
             )
 
-            logger.info("MySQL FULLTEXT indexes setup completed")
+            result = conn.execute(index_check_query)
+            existing_indexes = result.fetchone()[0]
+
+            if existing_indexes == 0:
+                logger.info("Creating MySQL FULLTEXT indexes...")
+                # Create FULLTEXT indexes
+                conn.execute(
+                    text(
+                        "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
+                    )
+                )
+                logger.info("MySQL FULLTEXT indexes setup completed")
+            else:
+                logger.debug(
+                    f"MySQL FULLTEXT indexes already exist ({existing_indexes}/2), skipping creation"
+                )
 
         except Exception as e:
-            logger.warning(
-                f"MySQL FULLTEXT setup failed (indexes may already exist): {e}"
-            )
+            logger.warning(f"MySQL FULLTEXT setup failed: {e}")
 
     def _setup_postgresql_fts(self, conn):
         """Setup PostgreSQL full-text search"""

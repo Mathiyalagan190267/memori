@@ -70,10 +70,25 @@ class DatabaseAutoCreator:
             logger.info(f"Successfully created database '{components['database']}'")
             return connection_string
 
+        except PermissionError as e:
+            logger.error(f"[DB_SETUP] Permission denied - {e}")
+            logger.warning(
+                f"[DB_SETUP] Database '{components['database']}' may need manual creation with proper permissions"
+            )
+            return connection_string
+        except RuntimeError as e:
+            logger.error(f"[DB_SETUP] Database creation error - {e}")
+            logger.info(
+                "[DB_SETUP] Proceeding with original connection string, database may need manual setup"
+            )
+            return connection_string
         except Exception as e:
-            logger.error(f"Database auto-creation failed: {e}")
-            # Don't raise exception - let the original connection attempt proceed
-            # This allows graceful degradation if user has manual setup
+            logger.error(
+                f"[DB_SETUP] Unexpected database auto-creation failure - {type(e).__name__}: {e}"
+            )
+            logger.debug(
+                f"[DB_SETUP] Connection string: {components['engine']}://{components['host']}:{components['port']}/{components['database']}"
+            )
             return connection_string
 
     def _database_exists(self, components: dict[str, str]) -> bool:
@@ -176,7 +191,12 @@ class DatabaseAutoCreator:
                 logger.error(error_msg)
             return False
         except Exception as e:
-            logger.error(f"MySQL database existence check failed: {e}")
+            logger.error(
+                f"[DB_CONNECTION] MySQL database existence check failed for '{components['database']}': {e}"
+            )
+            logger.debug(
+                f"[DB_CONNECTION] Connection details - host: {components['host']}, port: {components['port']}, user: {components['username']}"
+            )
             return False
 
     def _create_database(self, components: dict[str, str]) -> None:

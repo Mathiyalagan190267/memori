@@ -116,7 +116,7 @@ class ConsciouscAgent:
             return False
 
     async def initialize_existing_conscious_memories(
-        self, db_manager, namespace: str = "default"
+        self, db_manager, namespace: str = "default", limit: int = 10
     ) -> bool:
         """
         Initialize by copying ALL existing conscious-info memories to short-term memory
@@ -143,16 +143,17 @@ class ConsciouscAgent:
                 from sqlalchemy import text
 
                 with db_manager._get_connection() as connection:
-                    # Get ALL conscious-info labeled memories from long-term memory
+                    # Get top conscious-info labeled memories from long-term memory (limited for performance)
                     cursor = connection.execute(
                         text(
                             """SELECT memory_id, processed_data, summary, searchable_content,
                                   importance_score, created_at
                            FROM long_term_memory
                            WHERE namespace = :namespace AND classification = 'conscious-info'
-                           ORDER BY importance_score DESC, created_at DESC"""
+                           ORDER BY importance_score DESC, created_at DESC
+                           LIMIT :limit"""
                         ),
-                        {"namespace": namespace},
+                        {"namespace": namespace, "limit": limit},
                     )
                     existing_conscious_memories = cursor.fetchall()
 

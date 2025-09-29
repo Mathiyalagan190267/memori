@@ -3,6 +3,7 @@ Main Memori class - Pydantic-based memory interface v1.0
 """
 
 import asyncio
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -65,6 +66,7 @@ class Memori:
         schema_init: bool = True,  # Initialize database schema and create tables
         database_prefix: str | None = None,  # Database name prefix
         database_suffix: str | None = None,  # Database name suffix
+        conscious_memory_limit: int = 10,  # Limit for conscious memory processing
     ):
         """
         Initialize Memori memory system v1.0.
@@ -109,6 +111,14 @@ class Memori:
         self.schema_init = schema_init
         self.database_prefix = database_prefix
         self.database_suffix = database_suffix
+        # Validate conscious_memory_limit parameter
+        if not isinstance(conscious_memory_limit, int) or conscious_memory_limit < 1:
+            raise ValueError("conscious_memory_limit must be a positive integer")
+
+        self.conscious_memory_limit = conscious_memory_limit
+
+        # Thread safety for conscious memory initialization
+        self._conscious_init_lock = threading.RLock()
 
         # Configure provider based on explicit settings ONLY - no auto-detection
         if provider_config:
@@ -452,7 +462,7 @@ class Memori:
                 )
                 init_success = (
                     await self.conscious_agent.initialize_existing_conscious_memories(
-                        self.db_manager, self.namespace
+                        self.db_manager, self.namespace, self.conscious_memory_limit
                     )
                 )
                 if init_success:
@@ -478,52 +488,104 @@ class Memori:
 
     def _run_synchronous_conscious_initialization(self):
         """Run conscious agent initialization synchronously (when no event loop is available)"""
-        try:
-            if not self.conscious_agent:
-                return
+        with self._conscious_init_lock:
+            try:
+                if not self.conscious_agent:
+                    return
 
-            # If both auto_ingest and conscious_ingest are enabled,
-            # initialize by copying ALL existing conscious-info memories first
-            if self.auto_ingest and self.conscious_ingest:
-                logger.info(
-                    "Conscious-ingest: Both auto_ingest and conscious_ingest enabled - initializing existing conscious memories"
+                # Check if we've already initialized in this session to avoid repeated work
+                # Use namespace-specific key to prevent conflicts between instances
+                init_key = f"_conscious_initialized_{self.namespace or 'default'}"
+                if hasattr(self, init_key) and getattr(self, init_key):
+                    logger.debug(
+                        f"[CONSCIOUS] Already initialized for namespace '{self.namespace or 'default'}', skipping"
+                    )
+                    return
+
+                # If both auto_ingest and conscious_ingest are enabled,
+                # initialize by copying the most important existing conscious-info memories first
+                if self.auto_ingest and self.conscious_ingest:
+                    logger.info(
+                        "[CONSCIOUS] Both auto_ingest and conscious_ingest enabled - initializing existing conscious memories"
+                    )
+
+                    # Run optimized synchronous initialization of existing memories
+                    import time
+
+                    start_time = time.time()
+
+                    initialized = self._initialize_existing_conscious_memories_sync()
+
+                    elapsed = time.time() - start_time
+                    if initialized:
+                        logger.debug(
+                            f"[CONSCIOUS] Initialization completed in {elapsed:.2f}s"
+                        )
+                    else:
+                        logger.debug(
+                            f"[CONSCIOUS] Initialization skipped (no work needed) in {elapsed:.2f}s"
+                        )
+
+                # Mark as initialized to avoid repeated work for this specific namespace
+                init_key = f"_conscious_initialized_{self.namespace or 'default'}"
+                setattr(self, init_key, True)
+
+                logger.debug(
+                    "[CONSCIOUS] Synchronous conscious context extraction completed"
                 )
 
-                # Run synchronous initialization of existing memories
-                self._initialize_existing_conscious_memories_sync()
-
-            logger.debug(
-                "Conscious-ingest: Synchronous conscious context extraction completed"
-            )
-
-        except Exception as e:
-            logger.error(f"Synchronous conscious agent initialization failed: {e}")
+            except Exception as e:
+                logger.error(f"Synchronous conscious agent initialization failed: {e}")
 
     def _initialize_existing_conscious_memories_sync(self):
-        """Synchronously initialize existing conscious-info memories"""
+        """Synchronously initialize existing conscious-info memories with optimization"""
         try:
             from sqlalchemy import text
 
             with self.db_manager._get_connection() as connection:
-                # Get ALL conscious-info labeled memories from long-term memory
+                # First, check if we already have conscious memories in short-term storage
+                existing_short_term = connection.execute(
+                    text(
+                        """SELECT COUNT(*) FROM short_term_memory
+                           WHERE namespace = :namespace
+                           AND (category_primary = 'conscious_context' OR memory_id LIKE 'conscious_%')"""
+                    ),
+                    {"namespace": self.namespace or "default"},
+                ).scalar()
+
+                if existing_short_term > 0:
+                    logger.debug(
+                        f"[CONSCIOUS] {existing_short_term} conscious memories already in short-term storage, skipping initialization"
+                    )
+                    return False
+
+                # Get only the most important conscious-info memories (limit to 10 for performance)
                 cursor = connection.execute(
                     text(
                         """SELECT memory_id, processed_data, summary, searchable_content,
                               importance_score, created_at
                        FROM long_term_memory
                        WHERE namespace = :namespace AND classification = 'conscious-info'
-                       ORDER BY importance_score DESC, created_at DESC"""
+                       ORDER BY importance_score DESC, created_at DESC
+                       LIMIT :limit"""
                     ),
-                    {"namespace": self.namespace or "default"},
+                    {
+                        "namespace": self.namespace or "default",
+                        "limit": self.conscious_memory_limit,
+                    },
                 )
                 existing_conscious_memories = cursor.fetchall()
 
             if not existing_conscious_memories:
                 logger.debug(
-                    "Conscious-ingest: No existing conscious-info memories found for initialization"
+                    "[CONSCIOUS] No conscious-info memories found for initialization"
                 )
                 return False
 
+            # Batch process memories for efficiency
+            logger.debug(
+                f"[CONSCIOUS] Processing {len(existing_conscious_memories)} conscious memories..."
+            )
             copied_count = 0
             for memory_row in existing_conscious_memories:
                 success = self._copy_memory_to_short_term_sync(memory_row)
@@ -532,12 +594,12 @@ class Memori:
 
             if copied_count > 0:
                 logger.info(
-                    f"Conscious-ingest: Initialized {copied_count} existing conscious-info memories to short-term memory"
+                    f"[CONSCIOUS] Initialized {copied_count} conscious memories to short-term storage"
                 )
                 return True
             else:
                 logger.debug(
-                    "Conscious-ingest: No new conscious memories to initialize (all were duplicates)"
+                    "[CONSCIOUS] No new conscious memories to initialize (all were duplicates)"
                 )
                 return False
 
@@ -564,26 +626,25 @@ class Memori:
             from sqlalchemy import text
 
             with self.db_manager._get_connection() as connection:
-                # Check if similar content already exists in short-term memory
+                # Database-agnostic duplicate check with safer pattern matching
                 existing_check = connection.execute(
                     text(
                         """SELECT COUNT(*) FROM short_term_memory
                            WHERE namespace = :namespace
-                           AND category_primary = 'conscious_context'
-                           AND (searchable_content = :searchable_content
-                                OR summary = :summary)"""
+                           AND (memory_id = :exact_id
+                               OR memory_id LIKE :conscious_pattern)"""
                     ),
                     {
                         "namespace": self.namespace or "default",
-                        "searchable_content": searchable_content,
-                        "summary": summary,
+                        "exact_id": memory_id,
+                        "conscious_pattern": f"conscious_{memory_id}_%",
                     },
                 )
 
                 existing_count = existing_check.scalar()
                 if existing_count > 0:
                     logger.debug(
-                        f"Conscious-ingest: Skipping duplicate memory {memory_id} - similar content already exists in short-term memory"
+                        f"[CONSCIOUS] Skipping duplicate memory {memory_id[:8]}... - already exists in short-term memory"
                     )
                     return False
 
@@ -1892,7 +1953,7 @@ class Memori:
 
         # Debug logging for conversation recording
         logger.info(
-            f"Recording conversation - Input: '{user_input[:100]}...' Model: {model}"
+            f"[MEMORY] Recording conversation - Input: '{user_input[:60]}...' | Model: {model} | Session: {self.session_id[:8]}..."
         )
 
         # Parse response
@@ -1915,29 +1976,31 @@ class Memori:
                 namespace=self.namespace,
                 metadata=metadata or {},
             )
-            logger.debug(
-                f"Successfully stored chat history for conversation: {chat_id}"
-            )
+            logger.debug(f"[MEMORY] Chat history stored - ID: {chat_id[:8]}...")
 
             # Always process into long-term memory when memory agent is available
             if self.memory_agent:
                 self._schedule_memory_processing(
                     chat_id, user_input, response_text, response_model
                 )
-                logger.debug(f"Scheduled memory processing for conversation: {chat_id}")
+                logger.debug(f"[MEMORY] Processing scheduled - ID: {chat_id[:8]}...")
             else:
                 logger.warning(
-                    f"Memory agent not available, skipping memory processing for: {chat_id}"
+                    f"[MEMORY] Agent unavailable, skipping processing - ID: {chat_id[:8]}..."
                 )
 
-            logger.info(f"Recorded conversation successfully: {chat_id}")
+            logger.info(
+                f"[MEMORY] Conversation recorded successfully - ID: {chat_id[:8]}..."
+            )
             return chat_id
 
         except Exception as e:
-            logger.error(f"Failed to record conversation {chat_id}: {e}")
+            logger.error(
+                f"[MEMORY] Failed to record conversation {chat_id[:8]}... - {type(e).__name__}: {e}"
+            )
             import traceback
 
-            logger.error(f"Recording error details: {traceback.format_exc()}")
+            logger.debug(f"[MEMORY] Recording error details: {traceback.format_exc()}")
             raise
 
     def _schedule_memory_processing(
