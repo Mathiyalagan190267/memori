@@ -341,11 +341,12 @@ class SearchService:
                         AND MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)
                         {category_clause}
                         ORDER BY search_score DESC
-                        LIMIT {short_limit}
+                        LIMIT :short_limit
                     """
                     )
 
                     params["namespace"] = namespace
+                    params["short_limit"] = short_limit
 
                     short_results = self.session.execute(sql_query, params).fetchall()
 
@@ -412,11 +413,12 @@ class SearchService:
                         AND MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)
                         {category_clause}
                         ORDER BY search_score DESC
-                        LIMIT {long_limit}
+                        LIMIT :long_limit
                     """
                     )
 
                     params["namespace"] = namespace
+                    params["long_limit"] = long_limit
 
                     long_results = self.session.execute(sql_query, params).fetchall()
 

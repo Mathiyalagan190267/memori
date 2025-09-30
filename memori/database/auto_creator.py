@@ -45,6 +45,7 @@ class DatabaseAutoCreator:
             logger.debug("Auto-creation disabled, using original connection string")
             return connection_string
 
+        components = None
         try:
             # Parse connection string
             components = self.utils.parse_connection_string(connection_string)
@@ -72,9 +73,14 @@ class DatabaseAutoCreator:
 
         except PermissionError as e:
             logger.error(f"[DB_SETUP] Permission denied - {e}")
-            logger.warning(
-                f"[DB_SETUP] Database '{components['database']}' may need manual creation with proper permissions"
-            )
+            if components:
+                logger.warning(
+                    f"[DB_SETUP] Database '{components['database']}' may need manual creation with proper permissions"
+                )
+            else:
+                logger.warning(
+                    "[DB_SETUP] Database may need manual creation with proper permissions"
+                )
             return connection_string
         except RuntimeError as e:
             logger.error(f"[DB_SETUP] Database creation error - {e}")
@@ -86,9 +92,12 @@ class DatabaseAutoCreator:
             logger.error(
                 f"[DB_SETUP] Unexpected database auto-creation failure - {type(e).__name__}: {e}"
             )
-            logger.debug(
-                f"[DB_SETUP] Connection string: {components['engine']}://{components['host']}:{components['port']}/{components['database']}"
-            )
+            if components:
+                logger.debug(
+                    f"[DB_SETUP] Connection string: {components['engine']}://{components['host']}:{components['port']}/{components['database']}"
+                )
+            else:
+                logger.debug(f"[DB_SETUP] Connection string: {connection_string}")
             return connection_string
 
     def _database_exists(self, components: dict[str, str]) -> bool:

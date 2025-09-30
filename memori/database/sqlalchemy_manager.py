@@ -361,24 +361,52 @@ class SQLAlchemyDatabaseManager:
             result = conn.execute(index_check_query)
             existing_indexes = result.fetchone()[0]
 
-            if existing_indexes == 0:
-                logger.info("Creating MySQL FULLTEXT indexes...")
-                # Create FULLTEXT indexes
-                conn.execute(
+            if existing_indexes < 2:
+                logger.info(f"Creating missing MySQL FULLTEXT indexes ({existing_indexes}/2 exist)...")
+
+                # Check and create short_term_memory index if missing
+                short_term_check = conn.execute(
                     text(
-                        "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
+                        """
+                        SELECT COUNT(*) FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                        AND table_name = 'short_term_memory'
+                        AND index_name = 'ft_short_term_search'
+                        """
                     )
-                )
-                conn.execute(
+                ).fetchone()[0]
+
+                if short_term_check == 0:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
+                        )
+                    )
+                    logger.info("Created ft_short_term_search index")
+
+                # Check and create long_term_memory index if missing
+                long_term_check = conn.execute(
                     text(
-                        "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
+                        """
+                        SELECT COUNT(*) FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                        AND table_name = 'long_term_memory'
+                        AND index_name = 'ft_long_term_search'
+                        """
                     )
-                )
+                ).fetchone()[0]
+
+                if long_term_check == 0:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
+                        )
+                    )
+                    logger.info("Created ft_long_term_search index")
+
                 logger.info("MySQL FULLTEXT indexes setup completed")
             else:
-                logger.debug(
-                    f"MySQL FULLTEXT indexes already exist ({existing_indexes}/2), skipping creation"
-                )
+                logger.debug("MySQL FULLTEXT indexes already exist (2/2), skipping creation")
 
         except Exception as e:
             logger.warning(f"MySQL FULLTEXT setup failed: {e}")
