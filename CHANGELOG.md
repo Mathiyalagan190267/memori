@@ -5,16 +5,16 @@ All notable changes to Memori will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.1] - 2025-09-29
+## [2.3.0] - 2025-09-29
 
 ### 🚀 **Major Performance Improvements**
 
-**Performance Release**: Revolutionary 10x speed improvement in conscious memory initialization with enhanced safety and compatibility.
+**Feature Release**: Revolutionary 10x speed improvement in conscious memory initialization with enhanced safety and compatibility.
 
 #### ⚡ **Conscious Memory Performance Revolution**
 - **10x Faster Initialization**: Reduced conscious memory startup time from 10+ seconds to <1 second
 - **Session-Based Caching**: Intelligent caching prevents redundant re-initialization within sessions
-- **Configurable Memory Limits**: Added `conscious_memory_limit` parameter (default: 10) for customizable performance tuning
+- **NEW FEATURE - Configurable Memory Limits**: Added `conscious_memory_limit` parameter (default: 10) for customizable performance tuning
 - **Smart Pre-Check Optimization**: COUNT(*) queries skip expensive processing when memories already exist
 - **Optimized Duplicate Detection**: Enhanced memory_id pattern matching for faster duplicate prevention
 

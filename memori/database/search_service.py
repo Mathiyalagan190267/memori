@@ -139,7 +139,7 @@ class SearchService:
 
         if final_results:
             top_result = final_results[0]
-            memory_id = top_result.get("memory_id", "unknown")[:8]
+            memory_id = str(top_result.get("memory_id", "unknown"))[:8]
             score = top_result.get("composite_score", 0)
             strategy = top_result.get("search_strategy", "unknown")
             logger.debug(
@@ -493,23 +493,24 @@ class SearchService:
             # Search short-term memory if requested
             if search_short_term:
 
+                # Build category filter clause safely
+                category_clause = ""
+                if category_filter:
+                    category_clause = "AND category_primary = ANY(:category_list)"
+
                 # Use direct SQL to avoid SQLAlchemy Row conversion issues
                 short_sql = text(
-                    """
+                    f"""
                     SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
                            ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
                            'short_term' as memory_type, 'postgresql_fts' as search_strategy
                     FROM short_term_memory
                     WHERE namespace = :namespace
                     AND search_vector @@ to_tsquery('english', :query)
-                    {}
+                    {category_clause}
                     ORDER BY search_score DESC
                     LIMIT :limit
-                """.format(
-                        f"AND category_primary IN ({','.join([':cat'+str(i) for i in range(len(category_filter))])})"
-                        if category_filter
-                        else ""
-                    )
+                """
                 )
 
                 params = {
@@ -518,8 +519,7 @@ class SearchService:
                     "limit": short_limit,
                 }
                 if category_filter:
-                    for i, cat in enumerate(category_filter):
-                        params[f"cat{i}"] = cat
+                    params["category_list"] = category_filter
 
                 short_results = self.session.execute(short_sql, params).fetchall()
 
@@ -541,23 +541,24 @@ class SearchService:
 
             # Search long-term memory if requested
             if search_long_term:
+                # Build category filter clause safely
+                category_clause = ""
+                if category_filter:
+                    category_clause = "AND category_primary = ANY(:category_list)"
+
                 # Use direct SQL to avoid SQLAlchemy Row conversion issues
                 long_sql = text(
-                    """
+                    f"""
                     SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
                            ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
                            'long_term' as memory_type, 'postgresql_fts' as search_strategy
                     FROM long_term_memory
                     WHERE namespace = :namespace
                     AND search_vector @@ to_tsquery('english', :query)
-                    {}
+                    {category_clause}
                     ORDER BY search_score DESC
                     LIMIT :limit
-                """.format(
-                        f"AND category_primary IN ({','.join([':cat'+str(i) for i in range(len(category_filter))])})"
-                        if category_filter
-                        else ""
-                    )
+                """
                 )
 
                 params = {
@@ -566,8 +567,7 @@ class SearchService:
                     "limit": long_limit,
                 }
                 if category_filter:
-                    for i, cat in enumerate(category_filter):
-                        params[f"cat{i}"] = cat
+                    params["category_list"] = category_filter
 
                 long_results = self.session.execute(long_sql, params).fetchall()
 
