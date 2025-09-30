@@ -490,69 +490,100 @@ class SearchService:
 
             # Search short-term memory if requested
             if search_short_term:
-                short_query = self.session.query(ShortTermMemory).filter(
-                    ShortTermMemory.namespace == namespace
+
+                # Use direct SQL to avoid SQLAlchemy Row conversion issues
+                short_sql = text(
+                    """
+                    SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
+                           ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
+                           'short_term' as memory_type, 'postgresql_fts' as search_strategy
+                    FROM short_term_memory
+                    WHERE namespace = :namespace
+                    AND search_vector @@ to_tsquery('english', :query)
+                    {}
+                    ORDER BY search_score DESC
+                    LIMIT :limit
+                """.format(
+                        f"AND category_primary IN ({','.join([':cat'+str(i) for i in range(len(category_filter))])})"
+                        if category_filter
+                        else ""
+                    )
                 )
 
-                # Add tsvector search
-                ts_query = text(
-                    "search_vector @@ to_tsquery('english', :query)"
-                ).params(query=tsquery_text)
-                short_query = short_query.filter(ts_query)
-
-                # Add category filter
+                params = {
+                    "namespace": namespace,
+                    "query": tsquery_text,
+                    "limit": short_limit,
+                }
                 if category_filter:
-                    short_query = short_query.filter(
-                        ShortTermMemory.category_primary.in_(category_filter)
-                    )
+                    for i, cat in enumerate(category_filter):
+                        params[f"cat{i}"] = cat
 
-                # Add relevance score and limit
-                short_results = self.session.execute(
-                    short_query.statement.add_columns(
-                        text(
-                            "ts_rank(search_vector, to_tsquery('english', :query)) as search_score"
-                        ).params(query=tsquery_text),
-                        text("'short_term' as memory_type"),
-                        text("'postgresql_fts' as search_strategy"),
-                    )
-                    .order_by(text("search_score DESC"))
-                    .limit(short_limit)
-                ).fetchall()
+                short_results = self.session.execute(short_sql, params).fetchall()
 
-                results.extend([dict(row) for row in short_results])
+                # Convert to dictionaries manually with proper column mapping
+                for row in short_results:
+                    results.append(
+                        {
+                            "memory_id": row[0],
+                            "processed_data": row[1],
+                            "importance_score": row[2],
+                            "created_at": row[3],
+                            "summary": row[4],
+                            "category_primary": row[5],
+                            "search_score": row[6],
+                            "memory_type": row[7],
+                            "search_strategy": row[8],
+                        }
+                    )
 
             # Search long-term memory if requested
             if search_long_term:
-                long_query = self.session.query(LongTermMemory).filter(
-                    LongTermMemory.namespace == namespace
+                # Use direct SQL to avoid SQLAlchemy Row conversion issues
+                long_sql = text(
+                    """
+                    SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
+                           ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
+                           'long_term' as memory_type, 'postgresql_fts' as search_strategy
+                    FROM long_term_memory
+                    WHERE namespace = :namespace
+                    AND search_vector @@ to_tsquery('english', :query)
+                    {}
+                    ORDER BY search_score DESC
+                    LIMIT :limit
+                """.format(
+                        f"AND category_primary IN ({','.join([':cat'+str(i) for i in range(len(category_filter))])})"
+                        if category_filter
+                        else ""
+                    )
                 )
 
-                # Add tsvector search
-                ts_query = text(
-                    "search_vector @@ to_tsquery('english', :query)"
-                ).params(query=tsquery_text)
-                long_query = long_query.filter(ts_query)
-
-                # Add category filter
+                params = {
+                    "namespace": namespace,
+                    "query": tsquery_text,
+                    "limit": long_limit,
+                }
                 if category_filter:
-                    long_query = long_query.filter(
-                        LongTermMemory.category_primary.in_(category_filter)
-                    )
+                    for i, cat in enumerate(category_filter):
+                        params[f"cat{i}"] = cat
 
-                # Add relevance score and limit
-                long_results = self.session.execute(
-                    long_query.statement.add_columns(
-                        text(
-                            "ts_rank(search_vector, to_tsquery('english', :query)) as search_score"
-                        ).params(query=tsquery_text),
-                        text("'long_term' as memory_type"),
-                        text("'postgresql_fts' as search_strategy"),
-                    )
-                    .order_by(text("search_score DESC"))
-                    .limit(long_limit)
-                ).fetchall()
+                long_results = self.session.execute(long_sql, params).fetchall()
 
-                results.extend([dict(row) for row in long_results])
+                # Convert to dictionaries manually with proper column mapping
+                for row in long_results:
+                    results.append(
+                        {
+                            "memory_id": row[0],
+                            "processed_data": row[1],
+                            "importance_score": row[2],
+                            "created_at": row[3],
+                            "summary": row[4],
+                            "category_primary": row[5],
+                            "search_score": row[6],
+                            "memory_type": row[7],
+                            "search_strategy": row[8],
+                        }
+                    )
 
             return results
 
