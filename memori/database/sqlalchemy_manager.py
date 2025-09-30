@@ -362,7 +362,9 @@ class SQLAlchemyDatabaseManager:
             existing_indexes = result.fetchone()[0]
 
             if existing_indexes < 2:
-                logger.info(f"Creating missing MySQL FULLTEXT indexes ({existing_indexes}/2 exist)...")
+                logger.info(
+                    f"Creating missing MySQL FULLTEXT indexes ({existing_indexes}/2 exist)..."
+                )
 
                 # Check and create short_term_memory index if missing
                 short_term_check = conn.execute(
@@ -406,7 +408,9 @@ class SQLAlchemyDatabaseManager:
 
                 logger.info("MySQL FULLTEXT indexes setup completed")
             else:
-                logger.debug("MySQL FULLTEXT indexes already exist (2/2), skipping creation")
+                logger.debug(
+                    "MySQL FULLTEXT indexes already exist (2/2), skipping creation"
+                )
 
         except Exception as e:
             logger.warning(f"MySQL FULLTEXT setup failed: {e}")
