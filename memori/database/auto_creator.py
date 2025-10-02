@@ -28,6 +28,21 @@ class DatabaseAutoCreator:
         self.schema_init = schema_init
         self.utils = DatabaseConnectionUtils()
 
+    def _is_gibsonai_temp_connection(self, components: dict[str, str] | None) -> bool:
+        """Detect GibsonAI temporary database credentials to avoid noisy warnings."""
+        if not components:
+            return False
+
+        host = (components.get("host") or "").lower()
+        if "gibsonai.com" not in host:
+            return False
+
+        user = components.get("user") or components.get("username") or ""
+        database = components.get("database") or ""
+
+        # GibsonAI temporary credentials follow predictable us_/db_ prefixes
+        return user.startswith("us_") or database.startswith("db_")
+
     def ensure_database_exists(self, connection_string: str) -> str:
         """
         Ensure target database exists, creating it if necessary.
@@ -45,6 +60,7 @@ class DatabaseAutoCreator:
             logger.debug("Auto-creation disabled, using original connection string")
             return connection_string
 
+        components = None
         try:
             # Parse connection string
             components = self.utils.parse_connection_string(connection_string)
@@ -53,6 +69,13 @@ class DatabaseAutoCreator:
             if not components["needs_creation"]:
                 logger.debug(
                     f"Database engine {components['engine']} auto-creates, no action needed"
+                )
+                return connection_string
+
+            # Skip noisy warnings for managed GibsonAI temporary databases
+            if self._is_gibsonai_temp_connection(components):
+                logger.debug(
+                    "[DB_SETUP] GibsonAI managed database detected - skipping auto-creation checks"
                 )
                 return connection_string
 
@@ -70,10 +93,39 @@ class DatabaseAutoCreator:
             logger.info(f"Successfully created database '{components['database']}'")
             return connection_string
 
+        except PermissionError as e:
+            if components and self._is_gibsonai_temp_connection(components):
+                logger.debug(
+                    "[DB_SETUP] GibsonAI managed database does not allow auto-creation (permission denied)"
+                )
+                return connection_string
+
+            logger.error(f"[DB_SETUP] Permission denied - {e}")
+            if components:
+                logger.warning(
+                    f"[DB_SETUP] Database '{components['database']}' may need manual creation with proper permissions"
+                )
+            else:
+                logger.warning(
+                    "[DB_SETUP] Database may need manual creation with proper permissions"
+                )
+            return connection_string
+        except RuntimeError as e:
+            logger.error(f"[DB_SETUP] Database creation error - {e}")
+            logger.info(
+                "[DB_SETUP] Proceeding with original connection string, database may need manual setup"
+            )
+            return connection_string
         except Exception as e:
-            logger.error(f"Database auto-creation failed: {e}")
-            # Don't raise exception - let the original connection attempt proceed
-            # This allows graceful degradation if user has manual setup
+            logger.error(
+                f"[DB_SETUP] Unexpected database auto-creation failure - {type(e).__name__}: {e}"
+            )
+            if components:
+                logger.debug(
+                    f"[DB_SETUP] Connection string: {components['engine']}://{components['host']}:{components['port']}/{components['database']}"
+                )
+            else:
+                logger.debug(f"[DB_SETUP] Connection string: {connection_string}")
             return connection_string
 
     def _database_exists(self, components: dict[str, str]) -> bool:
@@ -90,7 +142,12 @@ class DatabaseAutoCreator:
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to check database existence: {e}")
+            if self._is_gibsonai_temp_connection(components):
+                logger.debug(
+                    "[DB_CONNECTION] Skipping GibsonAI database existence check due to restricted permissions"
+                )
+            else:
+                logger.error(f"Failed to check database existence: {e}")
             return False
 
     def _postgresql_database_exists(self, components: dict[str, str]) -> bool:
@@ -176,7 +233,17 @@ class DatabaseAutoCreator:
                 logger.error(error_msg)
             return False
         except Exception as e:
-            logger.error(f"MySQL database existence check failed: {e}")
+            if self._is_gibsonai_temp_connection(components):
+                logger.debug(
+                    f"[DB_CONNECTION] GibsonAI existence check bypassed for '{components['database']}' ({e})"
+                )
+            else:
+                logger.error(
+                    f"[DB_CONNECTION] MySQL database existence check failed for '{components['database']}': {e}"
+                )
+                logger.debug(
+                    f"[DB_CONNECTION] Connection details - host: {components.get('host')}, port: {components.get('port')}, user: {components.get('user') or components.get('username')}"
+                )
             return False
 
     def _create_database(self, components: dict[str, str]) -> None:

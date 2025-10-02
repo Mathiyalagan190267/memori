@@ -42,7 +42,7 @@ class SearchService:
             List of memory dictionaries with search metadata
         """
         logger.debug(
-            f"SearchService.search_memories called - query: '{query}', namespace: '{namespace}', database: {self.database_type}, limit: {limit}"
+            f"[SEARCH] Query initiated - '{query[:50]}{'...' if len(query) > 50 else ''}' | namespace: '{namespace}' | db: {self.database_type} | limit: {limit}"
         )
 
         if not query or not query.strip():
@@ -58,13 +58,13 @@ class SearchService:
         search_long_term = not memory_types or "long_term" in memory_types
 
         logger.debug(
-            f"Memory types to search - short_term: {search_short_term}, long_term: {search_long_term}, categories: {category_filter}"
+            f"[SEARCH] Target scope - short_term: {search_short_term} | long_term: {search_long_term} | categories: {category_filter or 'all'}"
         )
 
         try:
             # Try database-specific full-text search first
             if self.database_type == "sqlite":
-                logger.debug("Using SQLite FTS5 search strategy")
+                logger.debug("[SEARCH] Strategy: SQLite FTS5")
                 results = self._search_sqlite_fts(
                     query,
                     namespace,
@@ -74,7 +74,7 @@ class SearchService:
                     search_long_term,
                 )
             elif self.database_type == "mysql":
-                logger.debug("Using MySQL FULLTEXT search strategy")
+                logger.debug("[SEARCH] Strategy: MySQL FULLTEXT")
                 results = self._search_mysql_fulltext(
                     query,
                     namespace,
@@ -84,7 +84,7 @@ class SearchService:
                     search_long_term,
                 )
             elif self.database_type == "postgresql":
-                logger.debug("Using PostgreSQL FTS search strategy")
+                logger.debug("[SEARCH] Strategy: PostgreSQL FTS")
                 results = self._search_postgresql_fts(
                     query,
                     namespace,
@@ -94,12 +94,12 @@ class SearchService:
                     search_long_term,
                 )
 
-            logger.debug(f"Primary search strategy returned {len(results)} results")
+            logger.debug(f"[SEARCH] Primary strategy results: {len(results)} matches")
 
             # If no results or full-text search failed, fall back to LIKE search
             if not results:
                 logger.debug(
-                    "Primary search returned no results, falling back to LIKE search"
+                    "[SEARCH] Primary strategy empty, falling back to LIKE search"
                 )
                 results = self._search_like_fallback(
                     query,
@@ -112,13 +112,10 @@ class SearchService:
 
         except Exception as e:
             logger.error(
-                f"Full-text search failed for query '{query}' in namespace '{namespace}': {e}"
+                f"[SEARCH] Full-text search failed for '{query[:30]}...' in '{namespace}' - {type(e).__name__}: {e}"
             )
-            logger.debug(
-                f"Full-text search error details: {type(e).__name__}: {str(e)}",
-                exc_info=True,
-            )
-            logger.warning(f"Falling back to LIKE search for query '{query}'")
+            logger.debug("[SEARCH] Full-text error details", exc_info=True)
+            logger.warning("[SEARCH] Attempting LIKE fallback search")
             try:
                 results = self._search_like_fallback(
                     query,
@@ -128,21 +125,25 @@ class SearchService:
                     search_short_term,
                     search_long_term,
                 )
-                logger.debug(f"LIKE fallback search returned {len(results)} results")
+                logger.debug(f"[SEARCH] LIKE fallback results: {len(results)} matches")
             except Exception as fallback_e:
                 logger.error(
-                    f"LIKE fallback search also failed for query '{query}': {fallback_e}"
+                    f"[SEARCH] LIKE fallback also failed - {type(fallback_e).__name__}: {fallback_e}"
                 )
                 results = []
 
         final_results = self._rank_and_limit_results(results, limit)
         logger.debug(
-            f"SearchService completed - returning {len(final_results)} final results after ranking and limiting"
+            f"[SEARCH] Completed - {len(final_results)} results after ranking and limiting"
         )
 
         if final_results:
+            top_result = final_results[0]
+            memory_id = str(top_result.get("memory_id", "unknown"))[:8]
+            score = top_result.get("composite_score", 0)
+            strategy = top_result.get("search_strategy", "unknown")
             logger.debug(
-                f"Top result: memory_id={final_results[0].get('memory_id')}, score={final_results[0].get('composite_score', 0):.3f}, strategy={final_results[0].get('search_strategy')}"
+                f"[SEARCH] Top result: {memory_id}... | score: {score:.3f} | strategy: {strategy}"
             )
 
         return final_results
@@ -268,6 +269,36 @@ class SearchService:
         results = []
 
         try:
+            # First check if there are any records in the database
+            if search_short_term:
+                short_count = (
+                    self.session.query(ShortTermMemory)
+                    .filter(ShortTermMemory.namespace == namespace)
+                    .count()
+                )
+                if short_count == 0:
+                    logger.debug(
+                        "No short-term memories found in database, skipping FULLTEXT search"
+                    )
+                    search_short_term = False
+
+            if search_long_term:
+                long_count = (
+                    self.session.query(LongTermMemory)
+                    .filter(LongTermMemory.namespace == namespace)
+                    .count()
+                )
+                if long_count == 0:
+                    logger.debug(
+                        "No long-term memories found in database, skipping FULLTEXT search"
+                    )
+                    search_long_term = False
+
+            # If no records exist, return empty results
+            if not search_short_term and not search_long_term:
+                logger.debug("No memories found in database for FULLTEXT search")
+                return []
+
             # Apply limit proportionally between memory types
             short_limit = (
                 limit // 2 if search_short_term and search_long_term else limit
@@ -278,65 +309,147 @@ class SearchService:
 
             # Search short-term memory if requested
             if search_short_term:
-                short_query = self.session.query(ShortTermMemory).filter(
-                    ShortTermMemory.namespace == namespace
-                )
+                try:
+                    # Build category filter clause
+                    category_clause = ""
+                    params = {"query": query}
+                    if category_filter:
+                        category_placeholders = ",".join(
+                            [f":cat_{i}" for i in range(len(category_filter))]
+                        )
+                        category_clause = (
+                            f"AND category_primary IN ({category_placeholders})"
+                        )
+                        for i, cat in enumerate(category_filter):
+                            params[f"cat_{i}"] = cat
 
-                # Add FULLTEXT search
-                fulltext_condition = text(
-                    "MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)"
-                ).params(query=query)
-                short_query = short_query.filter(fulltext_condition)
-
-                # Add category filter
-                if category_filter:
-                    short_query = short_query.filter(
-                        ShortTermMemory.category_primary.in_(category_filter)
+                    # Use direct SQL query for more reliable results
+                    sql_query = text(
+                        f"""
+                        SELECT
+                            memory_id,
+                            processed_data,
+                            importance_score,
+                            created_at,
+                            summary,
+                            category_primary,
+                            MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE) as search_score,
+                            'short_term' as memory_type,
+                            'mysql_fulltext' as search_strategy
+                        FROM short_term_memory
+                        WHERE namespace = :namespace
+                        AND MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)
+                        {category_clause}
+                        ORDER BY search_score DESC
+                        LIMIT :short_limit
+                    """
                     )
 
-                # Add relevance score and limit
-                short_results = self.session.execute(
-                    short_query.statement.add_columns(
-                        text(
-                            "MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE) as search_score"
-                        ).params(query=query),
-                        text("'short_term' as memory_type"),
-                        text("'mysql_fulltext' as search_strategy"),
-                    ).limit(short_limit)
-                ).fetchall()
+                    params["namespace"] = namespace
+                    params["short_limit"] = short_limit
 
-                results.extend([dict(row) for row in short_results])
+                    short_results = self.session.execute(sql_query, params).fetchall()
+
+                    # Convert rows to dictionaries safely
+                    for row in short_results:
+                        try:
+                            if hasattr(row, "_mapping"):
+                                row_dict = dict(row._mapping)
+                            else:
+                                # Create dict from row values and keys
+                                row_dict = {
+                                    "memory_id": row[0],
+                                    "processed_data": row[1],
+                                    "importance_score": row[2],
+                                    "created_at": row[3],
+                                    "summary": row[4],
+                                    "category_primary": row[5],
+                                    "search_score": float(row[6]) if row[6] else 0.0,
+                                    "memory_type": row[7],
+                                    "search_strategy": row[8],
+                                }
+                            results.append(row_dict)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to convert short-term memory row to dict: {e}"
+                            )
+                            continue
+
+                except Exception as e:
+                    logger.warning(f"Short-term memory FULLTEXT search failed: {e}")
+                    # Continue to try long-term search
 
             # Search long-term memory if requested
             if search_long_term:
-                long_query = self.session.query(LongTermMemory).filter(
-                    LongTermMemory.namespace == namespace
-                )
+                try:
+                    # Build category filter clause
+                    category_clause = ""
+                    params = {"query": query}
+                    if category_filter:
+                        category_placeholders = ",".join(
+                            [f":cat_{i}" for i in range(len(category_filter))]
+                        )
+                        category_clause = (
+                            f"AND category_primary IN ({category_placeholders})"
+                        )
+                        for i, cat in enumerate(category_filter):
+                            params[f"cat_{i}"] = cat
 
-                # Add FULLTEXT search
-                fulltext_condition = text(
-                    "MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)"
-                ).params(query=query)
-                long_query = long_query.filter(fulltext_condition)
-
-                # Add category filter
-                if category_filter:
-                    long_query = long_query.filter(
-                        LongTermMemory.category_primary.in_(category_filter)
+                    # Use direct SQL query for more reliable results
+                    sql_query = text(
+                        f"""
+                        SELECT
+                            memory_id,
+                            processed_data,
+                            importance_score,
+                            created_at,
+                            summary,
+                            category_primary,
+                            MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE) as search_score,
+                            'long_term' as memory_type,
+                            'mysql_fulltext' as search_strategy
+                        FROM long_term_memory
+                        WHERE namespace = :namespace
+                        AND MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE)
+                        {category_clause}
+                        ORDER BY search_score DESC
+                        LIMIT :long_limit
+                    """
                     )
 
-                # Add relevance score and limit
-                long_results = self.session.execute(
-                    long_query.statement.add_columns(
-                        text(
-                            "MATCH(searchable_content, summary) AGAINST(:query IN NATURAL LANGUAGE MODE) as search_score"
-                        ).params(query=query),
-                        text("'long_term' as memory_type"),
-                        text("'mysql_fulltext' as search_strategy"),
-                    ).limit(long_limit)
-                ).fetchall()
+                    params["namespace"] = namespace
+                    params["long_limit"] = long_limit
 
-                results.extend([dict(row) for row in long_results])
+                    long_results = self.session.execute(sql_query, params).fetchall()
+
+                    # Convert rows to dictionaries safely
+                    for row in long_results:
+                        try:
+                            if hasattr(row, "_mapping"):
+                                row_dict = dict(row._mapping)
+                            else:
+                                # Create dict from row values and keys
+                                row_dict = {
+                                    "memory_id": row[0],
+                                    "processed_data": row[1],
+                                    "importance_score": row[2],
+                                    "created_at": row[3],
+                                    "summary": row[4],
+                                    "category_primary": row[5],
+                                    "search_score": float(row[6]) if row[6] else 0.0,
+                                    "memory_type": row[7],
+                                    "search_strategy": row[8],
+                                }
+                            results.append(row_dict)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to convert long-term memory row to dict: {e}"
+                            )
+                            continue
+
+                except Exception as e:
+                    logger.warning(f"Long-term memory FULLTEXT search failed: {e}")
+                    # Continue with whatever results we have
 
             return results
 
@@ -379,69 +492,100 @@ class SearchService:
 
             # Search short-term memory if requested
             if search_short_term:
-                short_query = self.session.query(ShortTermMemory).filter(
-                    ShortTermMemory.namespace == namespace
+
+                # Build category filter clause safely
+                category_clause = ""
+                if category_filter:
+                    category_clause = "AND category_primary = ANY(:category_list)"
+
+                # Use direct SQL to avoid SQLAlchemy Row conversion issues
+                short_sql = text(
+                    f"""
+                    SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
+                           ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
+                           'short_term' as memory_type, 'postgresql_fts' as search_strategy
+                    FROM short_term_memory
+                    WHERE namespace = :namespace
+                    AND search_vector @@ to_tsquery('english', :query)
+                    {category_clause}
+                    ORDER BY search_score DESC
+                    LIMIT :limit
+                """
                 )
 
-                # Add tsvector search
-                ts_query = text(
-                    "search_vector @@ to_tsquery('english', :query)"
-                ).params(query=tsquery_text)
-                short_query = short_query.filter(ts_query)
-
-                # Add category filter
+                params = {
+                    "namespace": namespace,
+                    "query": tsquery_text,
+                    "limit": short_limit,
+                }
                 if category_filter:
-                    short_query = short_query.filter(
-                        ShortTermMemory.category_primary.in_(category_filter)
-                    )
+                    params["category_list"] = category_filter
 
-                # Add relevance score and limit
-                short_results = self.session.execute(
-                    short_query.statement.add_columns(
-                        text(
-                            "ts_rank(search_vector, to_tsquery('english', :query)) as search_score"
-                        ).params(query=tsquery_text),
-                        text("'short_term' as memory_type"),
-                        text("'postgresql_fts' as search_strategy"),
-                    )
-                    .order_by(text("search_score DESC"))
-                    .limit(short_limit)
-                ).fetchall()
+                short_results = self.session.execute(short_sql, params).fetchall()
 
-                results.extend([dict(row) for row in short_results])
+                # Convert to dictionaries manually with proper column mapping
+                for row in short_results:
+                    results.append(
+                        {
+                            "memory_id": row[0],
+                            "processed_data": row[1],
+                            "importance_score": row[2],
+                            "created_at": row[3],
+                            "summary": row[4],
+                            "category_primary": row[5],
+                            "search_score": row[6],
+                            "memory_type": row[7],
+                            "search_strategy": row[8],
+                        }
+                    )
 
             # Search long-term memory if requested
             if search_long_term:
-                long_query = self.session.query(LongTermMemory).filter(
-                    LongTermMemory.namespace == namespace
+                # Build category filter clause safely
+                category_clause = ""
+                if category_filter:
+                    category_clause = "AND category_primary = ANY(:category_list)"
+
+                # Use direct SQL to avoid SQLAlchemy Row conversion issues
+                long_sql = text(
+                    f"""
+                    SELECT memory_id, processed_data, importance_score, created_at, summary, category_primary,
+                           ts_rank(search_vector, to_tsquery('english', :query)) as search_score,
+                           'long_term' as memory_type, 'postgresql_fts' as search_strategy
+                    FROM long_term_memory
+                    WHERE namespace = :namespace
+                    AND search_vector @@ to_tsquery('english', :query)
+                    {category_clause}
+                    ORDER BY search_score DESC
+                    LIMIT :limit
+                """
                 )
 
-                # Add tsvector search
-                ts_query = text(
-                    "search_vector @@ to_tsquery('english', :query)"
-                ).params(query=tsquery_text)
-                long_query = long_query.filter(ts_query)
-
-                # Add category filter
+                params = {
+                    "namespace": namespace,
+                    "query": tsquery_text,
+                    "limit": long_limit,
+                }
                 if category_filter:
-                    long_query = long_query.filter(
-                        LongTermMemory.category_primary.in_(category_filter)
-                    )
+                    params["category_list"] = category_filter
 
-                # Add relevance score and limit
-                long_results = self.session.execute(
-                    long_query.statement.add_columns(
-                        text(
-                            "ts_rank(search_vector, to_tsquery('english', :query)) as search_score"
-                        ).params(query=tsquery_text),
-                        text("'long_term' as memory_type"),
-                        text("'postgresql_fts' as search_strategy"),
-                    )
-                    .order_by(text("search_score DESC"))
-                    .limit(long_limit)
-                ).fetchall()
+                long_results = self.session.execute(long_sql, params).fetchall()
 
-                results.extend([dict(row) for row in long_results])
+                # Convert to dictionaries manually with proper column mapping
+                for row in long_results:
+                    results.append(
+                        {
+                            "memory_id": row[0],
+                            "processed_data": row[1],
+                            "importance_score": row[2],
+                            "created_at": row[3],
+                            "summary": row[4],
+                            "category_primary": row[5],
+                            "search_score": row[6],
+                            "memory_type": row[7],
+                            "search_strategy": row[8],
+                        }
+                    )
 
             return results
 

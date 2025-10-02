@@ -218,15 +218,25 @@ Be strategic and comprehensive in your search planning."""
             all_results = []
             seen_memory_ids = set()
 
-            # For MongoDB and SQL, use the unified search_memories method as primary strategy
-            # This ensures we use the database's native search capabilities
-            logger.debug(f"Executing unified database search using {db_type} manager")
-            primary_results = db_manager.search_memories(
-                query=search_plan.query_text or query, namespace=namespace, limit=limit
-            )
-            logger.debug(
-                f"Primary database search returned {len(primary_results)} results"
-            )
+            # For MongoDB and SQL, use SearchService directly to avoid recursion
+            # This ensures we use the database's native search capabilities without triggering context injection
+            logger.debug(f"Executing direct SearchService search using {db_type}")
+            try:
+                from ..database.search_service import SearchService
+
+                with db_manager.SessionLocal() as session:
+                    search_service = SearchService(session, db_type)
+                    primary_results = search_service.search_memories(
+                        query=search_plan.query_text or query,
+                        namespace=namespace,
+                        limit=limit,
+                    )
+                logger.debug(
+                    f"Direct SearchService returned {len(primary_results)} results"
+                )
+            except Exception as e:
+                logger.error(f"SearchService direct access failed: {e}")
+                primary_results = []
 
             # Process primary results and add search metadata
             for result in primary_results:
@@ -383,9 +393,17 @@ Be strategic and comprehensive in your search planning."""
 
         search_terms = " ".join(keywords)
         try:
-            results = db_manager.search_memories(
-                query=search_terms, namespace=namespace, limit=limit
-            )
+            # Use SearchService directly to avoid recursion
+            from ..database.search_service import SearchService
+
+            db_type = self._detect_database_type(db_manager)
+
+            with db_manager.SessionLocal() as session:
+                search_service = SearchService(session, db_type)
+                results = search_service.search_memories(
+                    query=search_terms, namespace=namespace, limit=limit
+                )
+
             # Ensure results is a list of dictionaries
             if not isinstance(results, list):
                 logger.warning(f"Search returned non-list result: {type(results)}")
@@ -417,14 +435,24 @@ Be strategic and comprehensive in your search planning."""
         if not categories:
             return []
 
-        # This would need to be implemented in the database manager
-        # For now, get all memories and filter by category
+        # Use SearchService directly to avoid recursion
+        # Get all memories and filter by category
         logger.debug(
             f"Searching memories by categories: {categories} in namespace: {namespace}"
         )
-        all_results = db_manager.search_memories(
-            query="", namespace=namespace, limit=limit * 3
-        )
+        try:
+            from ..database.search_service import SearchService
+
+            db_type = self._detect_database_type(db_manager)
+
+            with db_manager.SessionLocal() as session:
+                search_service = SearchService(session, db_type)
+                all_results = search_service.search_memories(
+                    query="", namespace=namespace, limit=limit * 3
+                )
+        except Exception as e:
+            logger.error(f"Category search failed: {e}")
+            all_results = []
 
         logger.debug(
             f"Retrieved {len(all_results)} total results for category filtering"

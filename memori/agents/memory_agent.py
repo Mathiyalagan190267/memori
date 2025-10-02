@@ -237,17 +237,19 @@ CONVERSATION CONTEXT:
                 )
 
             logger.debug(
-                f"Processed conversation {chat_id}: "
-                f"classification={processed_memory.classification}, "
-                f"importance={processed_memory.importance}, "
-                f"conscious_context={processed_memory.is_user_context}, "
-                f"promotion_eligible={processed_memory.promotion_eligible}"
+                f"[AGENT] Processed conversation {chat_id[:8]}... - "
+                f"classification: {processed_memory.classification.value} | "
+                f"importance: {processed_memory.importance.value} | "
+                f"conscious_context: {processed_memory.is_user_context} | "
+                f"promotion_eligible: {processed_memory.promotion_eligible}"
             )
 
             return processed_memory
 
         except Exception as e:
-            logger.error(f"Memory agent processing failed for {chat_id}: {e}")
+            logger.error(
+                f"[AGENT] Memory processing failed for {chat_id[:8]}... - {type(e).__name__}: {e}"
+            )
             return self._create_empty_long_term_memory(
                 chat_id, f"Processing failed: {str(e)}"
             )
@@ -307,7 +309,7 @@ CONVERSATION CONTEXT:
 
             if avg_similarity >= similarity_threshold:
                 logger.info(
-                    f"Duplicate detected: {avg_similarity:.2f} similarity with {existing.conversation_id}"
+                    f"[AGENT] Duplicate detected - {avg_similarity:.2f} similarity with {existing.conversation_id[:8]}..."
                 )
                 return existing.conversation_id
 

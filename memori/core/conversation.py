@@ -207,7 +207,7 @@ class ConversationManager:
             elif mode == "auto":
                 # Auto mode: Search long-term memory database for relevant context
                 logger.debug(
-                    f"Auto-ingest: Processing user input for long-term memory search: '{user_input[:50]}...'"
+                    f"[CONTEXT] Auto-ingest processing - Query: '{user_input[:50]}...' | Session: {session_id[:8]}..."
                 )
                 context = (
                     memori_instance._get_auto_ingest_context(user_input)
@@ -217,11 +217,11 @@ class ConversationManager:
                 if context:
                     context_prompt = self._build_auto_context_prompt(context)
                     logger.debug(
-                        f"Auto-ingest: Successfully injected long-term memory context with {len(context)} items for session {session_id}"
+                        f"[CONTEXT] Long-term memory injected - {len(context)} items | Session: {session_id[:8]}..."
                     )
                 else:
                     logger.debug(
-                        f"Auto-ingest: No relevant memories found in long-term database for query '{user_input[:50]}...' in session {session_id}"
+                        f"[CONTEXT] No relevant memories found for '{user_input[:30]}...' | Session: {session_id[:8]}..."
                     )
 
             # Get conversation history
@@ -246,7 +246,7 @@ class ConversationManager:
                         system_content += f"{role_label}: {msg['content']}\n"
                     system_content += "--- End History ---\n"
                     logger.debug(
-                        f"Added {len(previous_messages)} history messages for session {session_id}"
+                        f"[CONTEXT] Added {len(previous_messages)} history messages | Session: {session_id[:8]}..."
                     )
 
             # Find existing system message or create new one
@@ -267,16 +267,17 @@ class ConversationManager:
                     0, {"role": "system", "content": system_content}
                 )
 
+            context_status = "yes" if context_prompt else "no"
+            history_status = "yes" if len(history_messages) > 1 else "no"
             logger.debug(
-                f"Enhanced messages for session {session_id}: context={'yes' if context_prompt else 'no'}, "
-                f"history={'yes' if len(history_messages) > 1 else 'no'}"
+                f"[CONTEXT] Enhanced messages for session {session_id[:8]}... - context: {context_status} | history: {history_status}"
             )
 
             return enhanced_messages
 
         except Exception as e:
             logger.error(
-                f"Failed to inject context with history for session {session_id}: {e}"
+                f"[CONTEXT] Failed to inject context for session {session_id[:8]}... - {type(e).__name__}: {e}"
             )
             return messages
 

@@ -33,7 +33,7 @@ dev_consulting_memory = Memori(
     database_connect="sqlite:///dev_consulting_memory.db",
     auto_ingest=True,  # Automatically store conversation history
     conscious_ingest=True,  # Store important client preferences and decisions
-    verbose=False,  # Enable logging for audit purposes
+    verbose=False,  # Disable verbose logging for cleaner demo output
     namespace="dev_consulting",
 )
 
@@ -46,10 +46,17 @@ print("🧠 Memori memory system enabled for persistent client context\n")
 async def create_consulting_team():
     """Create a team of AutoGen agents for software development consulting"""
 
-    # Initialize OpenAI client
+    # Initialize OpenAI client with API key validation
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY environment variable is not set. "
+            "Please set it in your .env file or environment."
+        )
+
     model_client = OpenAIChatCompletionClient(
         model="gpt-4o-mini",
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=api_key,
     )
 
     # Create technical architect agent
