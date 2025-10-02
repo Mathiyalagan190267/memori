@@ -24,6 +24,10 @@ from ..agents.conscious_agent import ConsciouscAgent
 from ..config.memory_manager import MemoryManager
 from ..config.settings import LoggingSettings, LogLevel
 from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager
+from ..integrations.openai_integration import (
+    activate_memori_instance,
+    suppress_auto_recording,
+)
 from ..utils.exceptions import DatabaseError, MemoriError
 from ..utils.logging import LoggingManager
 from ..utils.pydantic_models import ConversationContext
@@ -67,6 +71,7 @@ class Memori:
         database_prefix: str | None = None,  # Database name prefix
         database_suffix: str | None = None,  # Database name suffix
         conscious_memory_limit: int = 10,  # Limit for conscious memory processing
+        max_processing_per_minute: int | None = 30,
     ):
         """
         Initialize Memori memory system v1.0.
@@ -97,6 +102,8 @@ class Memori:
             enable_auto_creation: Enable automatic database creation if database doesn't exist
             database_prefix: Optional prefix for database name (for multi-tenant setups)
             database_suffix: Optional suffix for database name (e.g., 'dev', 'prod', 'test')
+            conscious_memory_limit: Limit for conscious context caching
+            max_processing_per_minute: Max background memory ingestions per minute (0 disables)
         """
         self.database_connect = database_connect
         self.template = template
@@ -119,6 +126,12 @@ class Memori:
 
         # Thread safety for conscious memory initialization
         self._conscious_init_lock = threading.RLock()
+
+        # Rate limiting for background processing (token bucket per minute)
+        self.max_processing_per_minute = max_processing_per_minute or 0
+        self._processing_lock = threading.Lock()
+        self._processing_window_start = time.time()
+        self._processing_count = 0
 
         # Configure provider based on explicit settings ONLY - no auto-detection
         if provider_config:
@@ -2007,6 +2020,12 @@ class Memori:
         self, chat_id: str, user_input: str, ai_output: str, model: str
     ):
         """Schedule memory processing (async if possible, sync fallback)."""
+        if not self._acquire_processing_slot():
+            logger.warning(
+                f"Rate limit reached for memory processing in namespace '{self.namespace}', skipping ingestion"
+            )
+            return
+
         try:
             loop = asyncio.get_running_loop()
             task = loop.create_task(
@@ -2023,6 +2042,23 @@ class Memori:
             logger.debug("No event loop, using synchronous memory processing")
             self._process_memory_sync(chat_id, user_input, ai_output, model)
 
+    def _acquire_processing_slot(self) -> bool:
+        """Token bucket limiter to avoid unbounded background processing."""
+        if not self.max_processing_per_minute:
+            return True
+
+        now = time.time()
+        with self._processing_lock:
+            if now - self._processing_window_start >= 60:
+                self._processing_window_start = now
+                self._processing_count = 0
+
+            if self._processing_count >= self.max_processing_per_minute:
+                return False
+
+            self._processing_count += 1
+            return True
+
     async def _process_memory_async(
         self, chat_id: str, user_input: str, ai_output: str, model: str = "unknown"
     ):
@@ -2031,72 +2067,78 @@ class Memori:
             logger.warning("Memory agent not available, skipping memory ingestion")
             return
 
-        try:
-            # Create conversation context
-            context = ConversationContext(
-                user_id=self.user_id,
-                session_id=self._session_id,
-                conversation_id=chat_id,
-                model_used=model,
-                user_preferences=self._user_context.get("user_preferences", []),
-                current_projects=self._user_context.get("current_projects", []),
-                relevant_skills=self._user_context.get("relevant_skills", []),
-            )
+        with activate_memori_instance(self):
+            try:
+                # Create conversation context
+                context = ConversationContext(
+                    user_id=self.user_id,
+                    session_id=self._session_id,
+                    conversation_id=chat_id,
+                    model_used=model,
+                    user_preferences=self._user_context.get("user_preferences", []),
+                    current_projects=self._user_context.get("current_projects", []),
+                    relevant_skills=self._user_context.get("relevant_skills", []),
+                )
 
-            # Get recent memories for deduplication
-            existing_memories = await self._get_recent_memories_for_dedup()
+                # Get recent memories for deduplication
+                existing_memories = await self._get_recent_memories_for_dedup()
 
-            # Process conversation using async Pydantic-based memory agent
-            processed_memory = await self.memory_agent.process_conversation_async(
-                chat_id=chat_id,
-                user_input=user_input,
-                ai_output=ai_output,
-                context=context,
-                existing_memories=(
-                    [mem.summary for mem in existing_memories[:10]]
-                    if existing_memories
-                    else []
-                ),
-            )
+                # Process conversation using async Pydantic-based memory agent
+                try:
+                    with suppress_auto_recording():
+                        processed_memory = await self.memory_agent.process_conversation_async(
+                            chat_id=chat_id,
+                            user_input=user_input,
+                            ai_output=ai_output,
+                            context=context,
+                            existing_memories=(
+                                [mem.summary for mem in existing_memories[:10]]
+                                if existing_memories
+                                else []
+                            ),
+                        )
+                except Exception as e:
+                    logger.error(f"Memory ingestion failed for {chat_id}: {e}")
+                    return
 
-            # Check for duplicates
-            duplicate_id = await self.memory_agent.detect_duplicates(
-                processed_memory, existing_memories
-            )
+                # Check for duplicates
+                duplicate_id = await self.memory_agent.detect_duplicates(
+                    processed_memory, existing_memories
+                )
 
-            if duplicate_id:
-                processed_memory.duplicate_of = duplicate_id
-                logger.info(f"Memory marked as duplicate of {duplicate_id}")
+                if duplicate_id:
+                    processed_memory.duplicate_of = duplicate_id
+                    logger.info(f"Memory marked as duplicate of {duplicate_id}")
 
-            # Apply filters
-            if self.memory_agent.should_filter_memory(
-                processed_memory, self.memory_filters
-            ):
-                logger.debug(f"Memory filtered out for chat {chat_id}")
-                return
-
-            # Store processed memory with new schema
-            memory_id = self.db_manager.store_long_term_memory_enhanced(
-                processed_memory, chat_id, self.namespace
-            )
-
-            if memory_id:
-                logger.debug(f"Stored processed memory {memory_id} for chat {chat_id}")
-
-                # Check for conscious context updates if promotion eligible and conscious_ingest enabled
-                if (
-                    processed_memory.promotion_eligible
-                    and self.conscious_agent
-                    and self.conscious_ingest
+                # Apply filters
+                if self.memory_agent.should_filter_memory(
+                    processed_memory, self.memory_filters
                 ):
-                    await self.conscious_agent.check_for_context_updates(
-                        self.db_manager, self.namespace
-                    )
-            else:
-                logger.warning(f"Failed to store memory for chat {chat_id}")
+                    logger.debug(f"Memory filtered out for chat {chat_id}")
+                    return
 
-        except Exception as e:
-            logger.error(f"Memory ingestion failed for {chat_id}: {e}")
+                # Store processed memory with new schema
+                memory_id = self.db_manager.store_long_term_memory_enhanced(
+                    processed_memory, chat_id, self.namespace
+                )
+
+                if memory_id:
+                    logger.debug(f"Stored processed memory {memory_id} for chat {chat_id}")
+
+                    # Check for conscious context updates if promotion eligible and conscious_ingest enabled
+                    if (
+                        processed_memory.promotion_eligible
+                        and self.conscious_agent
+                        and self.conscious_ingest
+                    ):
+                        await self.conscious_agent.check_for_context_updates(
+                            self.db_manager, self.namespace
+                        )
+                else:
+                    logger.warning(f"Failed to store memory for chat {chat_id}")
+
+            except Exception as e:
+                logger.error(f"Memory ingestion failed for {chat_id}: {e}")
 
     async def _get_recent_memories_for_dedup(self) -> list:
         """Get recent memories for deduplication check"""
