@@ -8,7 +8,7 @@ Setup Instructions:
 2. Create a New Project with a prompt like: "Create an empty database"
 3. Go to Databases tab from the GibsonAI App and copy connection string for Development or Production environment
 4. Replace the placeholder connection string below with your actual GibsonAI connection string
-5. Install required dependencies: pip install openai memorisdk
+5. Install required dependencies: pip install openai memorisdk mysql-connector-python
 6. Set your OpenAI API key in the environment: export OPENAI_API_KEY
 
 The connection string format looks like:
