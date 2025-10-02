@@ -87,7 +87,10 @@ jobs:
           echo "Running pip-audit scan..."
           pip-audit --format=json --output=pip-audit-report.json --progress-spinner=off || true
           pip-audit --format=cyclonedx --output=sbom.json || true
-          pip-audit
+          # Ignore GHSA-4xh5-x5gv-qwph (CVE-2025-8869) for pip 25.2
+          # This vulnerability only affects Python versions without PEP 706 implementation
+          # We use Python 3.11+ which has PEP 706, making this vulnerability non-exploitable
+          pip-audit --ignore-vuln GHSA-4xh5-x5gv-qwph
 
       - name: Create empty artifact files if scans skipped
         if: steps.check-requirements.outputs.result == 'missing'
