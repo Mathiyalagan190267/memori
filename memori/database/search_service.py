@@ -1,24 +1,52 @@
 """
 SQLAlchemy-based search service for Memori v2.0
-Provides cross-database full-text search capabilities
+Provides cross-database full-text search capabilities with graph integration
 """
 
+import re
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 from sqlalchemy import and_, desc, or_, text
 from sqlalchemy.orm import Session
 
 from .models import LongTermMemory, ShortTermMemory
+from memori.utils.pydantic_models import (
+    GraphExpansionConfig,
+    SearchStrategy,
+    ScoringWeights,
+)
 
 
 class SearchService:
-    """Cross-database search service using SQLAlchemy"""
+    """Cross-database search service using SQLAlchemy with graph capabilities"""
 
-    def __init__(self, session: Session, database_type: str):
+    def __init__(
+        self,
+        session: Session,
+        database_type: str,
+        graph_search_service: Optional[Any] = None,
+    ):
         self.session = session
         self.database_type = database_type
+        self.graph_search_service = graph_search_service
+
+    # ------------------------------------------------------------------
+    # Query preparation helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sanitize_query_tokens(query: str) -> list[str]:
+        """Tokenize and strip punctuation for cross-database FTS usage"""
+
+        tokens = []
+        for raw in re.split(r"\s+", query.strip()):
+            cleaned = raw.strip().strip(",.?!;:\"'()[]{}<>")
+            cleaned = re.sub(r"[^0-9A-Za-z_]+", "", cleaned)
+            if cleaned:
+                tokens.append(cleaned.lower())
+        return tokens
 
     def search_memories(
         self,
@@ -62,6 +90,8 @@ class SearchService:
         )
 
         try:
+            sanitized_tokens = self._sanitize_query_tokens(query)
+            match_query = " ".join(sanitized_tokens) if sanitized_tokens else query.strip()
             # Try database-specific full-text search first
             if self.database_type == "sqlite":
                 logger.debug("[SEARCH] Strategy: SQLite FTS5")
@@ -172,8 +202,27 @@ class SearchService:
                 f"Search scope - short_term: {search_short_term}, long_term: {search_long_term}"
             )
 
-            # Build FTS query
-            fts_query = f'"{query.strip()}"'
+            # Build FTS query using tokenized terms so multi-word queries do not
+            # degrade into slow LIKE fallbacks. Terms longer than two characters
+            # get prefix matching for better recall.
+            tokens = self._sanitize_query_tokens(query)
+            long_terms = [t for t in tokens if len(t) > 2]
+            processed_terms = []
+
+            for term in long_terms:
+                sanitized = term.replace('"', '""')
+                processed_terms.append(f"{sanitized}*")
+
+            if not processed_terms and tokens:
+                # If everything was short (e.g. "AI"), keep at least one token
+                sanitized = tokens[0].replace('"', '""')
+                processed_terms.append(f"{sanitized}*")
+
+            if processed_terms:
+                fts_query = " OR ".join(processed_terms)
+            else:
+                fts_query = query.strip()
+
             logger.debug(f"FTS query built: {fts_query}")
 
             # Build category filter
@@ -227,7 +276,7 @@ class SearchService:
                 LEFT JOIN long_term_memory lt ON fts.memory_id = lt.memory_id AND fts.memory_type = 'long_term'
                 WHERE memory_search_fts MATCH :fts_query AND fts.namespace = :namespace
                 {category_clause}
-                ORDER BY search_score, importance_score DESC
+                ORDER BY search_score DESC, importance_score DESC
                 LIMIT {limit}
             """
 
@@ -312,7 +361,7 @@ class SearchService:
                 try:
                     # Build category filter clause
                     category_clause = ""
-                    params = {"query": query}
+                    params = {"query": match_query}
                     if category_filter:
                         category_placeholders = ",".join(
                             [f":cat_{i}" for i in range(len(category_filter))]
@@ -384,7 +433,7 @@ class SearchService:
                 try:
                     # Build category filter clause
                     category_clause = ""
-                    params = {"query": query}
+                    params = {"query": match_query}
                     if category_filter:
                         category_placeholders = ",".join(
                             [f":cat_{i}" for i in range(len(category_filter))]
@@ -478,6 +527,13 @@ class SearchService:
         results = []
 
         try:
+            sanitized_tokens = self._sanitize_query_tokens(query)
+            if sanitized_tokens:
+                ts_terms = [f"{term}:*" for term in sanitized_tokens]
+                tsquery_text = " & ".join(ts_terms)
+            else:
+                tsquery_text = query.strip() or ""
+
             # Apply limit proportionally between memory types
             short_limit = (
                 limit // 2 if search_short_term and search_long_term else limit
@@ -486,9 +542,9 @@ class SearchService:
                 limit - short_limit if search_short_term and search_long_term else limit
             )
 
-            # Prepare query for tsquery - handle spaces and special characters
-            # Convert simple query to tsquery format (join words with &)
-            tsquery_text = " & ".join(query.split())
+            if not tsquery_text:
+                logger.debug("Empty tsquery after sanitization, skipping PostgreSQL FTS")
+                return []
 
             # Search short-term memory if requested
             if search_short_term:
@@ -842,3 +898,206 @@ class SearchService:
             return max(0, 1 - (days_old / 30))  # Full score for recent, 0 after 30 days
         except:
             return 0.0
+
+    # ==================== Graph-Enhanced Search Methods ====================
+
+    def search_with_graph(
+        self,
+        query: str,
+        namespace: str = "default",
+        strategy: SearchStrategy = SearchStrategy.GRAPH_EXPANSION_1HOP,
+        entities: Optional[list[str]] = None,
+        category_filter: Optional[list[str]] = None,
+        graph_expansion: Optional[GraphExpansionConfig] = None,
+        scoring_weights: Optional[ScoringWeights] = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Search memories using graph-based strategies
+
+        Args:
+            query: Search query text
+            namespace: Memory namespace
+            strategy: Graph search strategy to use
+            entities: Optional entity filters
+            category_filter: Optional category filters
+            graph_expansion: Graph expansion configuration
+            scoring_weights: Scoring weights for composite scoring
+            limit: Maximum results
+
+        Returns:
+            List of memory dictionaries with graph metadata
+        """
+        if not self.graph_search_service:
+            logger.warning(
+                "GraphSearchService not initialized, falling back to text-only search"
+            )
+            return self.search_memories(
+                query=query,
+                namespace=namespace,
+                category_filter=category_filter,
+                limit=limit,
+            )
+
+        logger.info(
+            f"Graph-enhanced search: strategy={strategy}, query='{query[:50]}...', "
+            f"namespace={namespace}, entities={entities}"
+        )
+
+        try:
+            # Use GraphSearchService for graph-based search
+            graph_results = self.graph_search_service.search(
+                query_text=query,
+                strategy=strategy,
+                namespace=namespace,
+                entities=entities or [],
+                categories=category_filter or [],
+                graph_expansion=graph_expansion,
+                scoring_weights=scoring_weights,
+                max_results=limit,
+            )
+
+            # Convert GraphSearchResult objects to dict format
+            results = []
+            for result in graph_results:
+                result_dict = {
+                    "memory_id": result.memory_id,
+                    "memory_type": "long_term",  # Graph results come from both
+                    "processed_data": {"content": result.content},
+                    "summary": result.summary,
+                    "importance_score": result.importance_score,
+                    "created_at": result.timestamp,
+                    "category_primary": result.category,
+                    "search_score": result.composite_score,
+                    "composite_score": result.composite_score,
+                    "search_strategy": f"graph_{strategy.value}",
+                    # Graph-specific metadata
+                    "hop_distance": result.hop_distance,
+                    "shared_entities": result.shared_entities,
+                    "match_reason": result.match_reason,
+                    "graph_strength_score": result.graph_strength_score,
+                    "entity_overlap_score": result.entity_overlap_score,
+                    "text_relevance_score": result.text_relevance_score,
+                }
+                results.append(result_dict)
+
+            logger.info(
+                f"Graph search completed: {len(results)} results with strategy={strategy}"
+            )
+            return results
+
+        except Exception as e:
+            logger.error(f"Graph search failed: {e}, falling back to text search")
+            logger.debug("Graph search error details", exc_info=True)
+            # Fallback to traditional search
+            return self.search_memories(
+                query=query,
+                namespace=namespace,
+                category_filter=category_filter,
+                limit=limit,
+            )
+
+    def search_by_entities(
+        self,
+        entities: list[str],
+        namespace: str = "default",
+        category_filter: Optional[list[str]] = None,
+        expand_graph: bool = True,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """
+        Search memories by entity tags
+
+        Args:
+            entities: List of entity values to search for
+            namespace: Memory namespace
+            category_filter: Optional category filters
+            expand_graph: Whether to expand via graph relationships
+            limit: Maximum results
+
+        Returns:
+            List of memory dictionaries
+        """
+        if not self.graph_search_service:
+            logger.warning("GraphSearchService not available for entity search")
+            return []
+
+        strategy = (
+            SearchStrategy.GRAPH_EXPANSION_1HOP
+            if expand_graph
+            else SearchStrategy.ENTITY_FIRST
+        )
+
+        return self.search_with_graph(
+            query="",
+            namespace=namespace,
+            strategy=strategy,
+            entities=entities,
+            category_filter=category_filter,
+            limit=limit,
+        )
+
+    def find_related_memories(
+        self,
+        memory_id: str,
+        namespace: str = "default",
+        max_hops: int = 2,
+        min_strength: float = 0.5,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Find memories related to a specific memory via graph relationships
+
+        Args:
+            memory_id: Source memory ID
+            namespace: Memory namespace
+            max_hops: Maximum hop distance (1-3)
+            min_strength: Minimum relationship strength
+            limit: Maximum results
+
+        Returns:
+            List of related memory dictionaries
+        """
+        if not self.graph_search_service:
+            logger.warning("GraphSearchService not available for related memory search")
+            return []
+
+        try:
+            # Use graph walk strategy starting from this memory
+            graph_expansion = GraphExpansionConfig(
+                enabled=True,
+                hop_distance=max_hops,
+                min_relationship_strength=min_strength,
+            )
+
+            # Get related memories via graph expansion
+            results = self.graph_search_service.search_with_expansion(
+                query_text="",
+                entities=[],
+                categories=[],
+                namespace=namespace,
+                expand_hops=max_hops,
+                min_strength=min_strength,
+                limit=limit,
+            )
+
+            # Convert to dict format
+            related = []
+            for result in results:
+                if result.memory_id != memory_id:  # Exclude source memory
+                    related.append(
+                        {
+                            "memory_id": result.memory_id,
+                            "summary": result.summary,
+                            "hop_distance": result.hop_distance,
+                            "relationship_strength": result.graph_strength_score,
+                            "shared_entities": result.shared_entities,
+                            "match_reason": result.match_reason,
+                        }
+                    )
+
+            return related[:limit]
+
+        except Exception as e:
+            logger.error(f"Failed to find related memories for {memory_id}: {e}")
+            return []

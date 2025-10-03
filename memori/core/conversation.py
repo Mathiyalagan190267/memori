@@ -332,7 +332,7 @@ class ConversationManager:
         for mem in context:
             if isinstance(mem, dict):
                 content = mem.get("searchable_content", "") or mem.get("summary", "")
-                category = mem.get("category_primary", "")
+                category = mem.get("category_primary") or ""  # Ensure string, not None
 
                 # Skip duplicates (case-insensitive)
                 content_key = content.lower().strip()
@@ -340,7 +340,7 @@ class ConversationManager:
                     continue
                 seen_content.add(content_key)
 
-                if category.startswith("essential_"):
+                if category and category.startswith("essential_"):
                     context_prompt += f"[{category.upper()}] {content}\n"
                 else:
                     context_prompt += f"- {content}\n"

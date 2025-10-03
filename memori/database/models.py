@@ -180,6 +180,98 @@ class LongTermMemory(Base):
     )
 
 
+class MemoryEntity(Base):
+    """Entity extraction table for graph-based search"""
+
+    __tablename__ = "memory_entities"
+
+    entity_id = Column(String(255), primary_key=True)
+    memory_id = Column(String(255), nullable=False)
+    memory_type = Column(String(50), nullable=False)  # 'short_term' or 'long_term'
+    entity_type = Column(String(100), nullable=False)  # person, tech, topic, etc.
+    entity_value = Column(String(500), nullable=False)
+    normalized_value = Column(String(500), nullable=False)  # Lowercase normalized
+    relevance_score = Column(Float, default=0.5)
+    namespace = Column(String(255), nullable=False, default="default")
+    frequency = Column(Integer, default=1)  # How many times mentioned
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    context = Column(Text)  # Additional context about the entity
+
+    # Indexes for fast entity-based search
+    __table_args__ = (
+        Index("idx_entity_memory", "memory_id", "memory_type"),
+        Index("idx_entity_type", "entity_type"),
+        Index("idx_entity_value", "entity_value"),
+        Index("idx_entity_normalized", "normalized_value"),
+        Index("idx_entity_namespace", "namespace"),
+        Index("idx_entity_relevance", "relevance_score"),
+        Index("idx_entity_type_value", "entity_type", "normalized_value"),
+        Index("idx_entity_namespace_type", "namespace", "entity_type"),
+        Index(
+            "idx_entity_compound",
+            "namespace",
+            "entity_type",
+            "normalized_value",
+            "relevance_score",
+        ),
+    )
+
+
+class MemoryRelationshipDB(Base):
+    """Relationship graph table for memory connections"""
+
+    __tablename__ = "memory_relationships"
+
+    relationship_id = Column(String(255), primary_key=True)
+    source_memory_id = Column(String(255), nullable=False)
+    target_memory_id = Column(String(255), nullable=False)
+    source_memory_type = Column(String(50), nullable=False)  # 'short_term' or 'long_term'
+    target_memory_type = Column(String(50), nullable=False)
+    relationship_type = Column(
+        String(100), nullable=False
+    )  # semantic_similarity, causality, etc.
+    strength = Column(Float, nullable=False, default=0.5)  # 0.0-1.0
+    bidirectional = Column(Boolean, default=True)
+    namespace = Column(String(255), nullable=False, default="default")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_strengthened = Column(DateTime)  # When strength was updated
+    access_count = Column(Integer, default=0)  # How often traversed
+    reasoning = Column(Text)  # Why this relationship exists
+    shared_entity_count = Column(Integer, default=0)  # Number of shared entities
+    metadata_json = Column(JSON)  # Additional relationship metadata
+
+    # Indexes for graph traversal
+    __table_args__ = (
+        Index("idx_rel_source", "source_memory_id", "source_memory_type"),
+        Index("idx_rel_target", "target_memory_id", "target_memory_type"),
+        Index("idx_rel_type", "relationship_type"),
+        Index("idx_rel_strength", "strength"),
+        Index("idx_rel_namespace", "namespace"),
+        Index("idx_rel_bidirectional", "bidirectional"),
+        Index("idx_rel_source_type", "source_memory_id", "relationship_type"),
+        Index("idx_rel_target_type", "target_memory_id", "relationship_type"),
+        Index(
+            "idx_rel_compound_source",
+            "source_memory_id",
+            "relationship_type",
+            "strength",
+        ),
+        Index(
+            "idx_rel_compound_target",
+            "target_memory_id",
+            "relationship_type",
+            "strength",
+        ),
+        Index(
+            "idx_rel_namespace_type",
+            "namespace",
+            "relationship_type",
+            "strength",
+        ),
+        Index("idx_rel_entity_count", "shared_entity_count"),
+    )
+
+
 # Database-specific configurations
 def configure_mysql_fulltext(engine):
     """Configure MySQL FULLTEXT indexes"""

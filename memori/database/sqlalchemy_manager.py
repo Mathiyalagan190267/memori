@@ -63,7 +63,44 @@ class SQLAlchemyDatabaseManager:
         # Initialize query parameter translator for cross-database compatibility
         self.query_translator = QueryParameterTranslator(self.database_type)
 
+        # Graph search components (set later via set_graph_components)
+        self.graph_search_service = None
+        self.entity_extractor = None
+        self.relationship_detector = None
+
         logger.info(f"Initialized SQLAlchemy database manager for {self.database_type}")
+
+    def set_graph_components(
+        self,
+        graph_search_service: Any = None,
+        entity_extractor: Any = None,
+        relationship_detector: Any = None,
+    ):
+        """
+        Set graph search components after initialization
+
+        Args:
+            graph_search_service: GraphSearchService instance
+            entity_extractor: EntityExtractionService instance
+            relationship_detector: RelationshipDetectionService instance
+        """
+        self.graph_search_service = graph_search_service
+        self.entity_extractor = entity_extractor
+        self.relationship_detector = relationship_detector
+        logger.info("Graph search components configured for database manager")
+
+    def get_session(self):
+        """
+        Get a new database session (context manager)
+
+        Returns:
+            SQLAlchemy session context manager
+
+        Example:
+            with db_manager.get_session() as session:
+                results = session.query(Model).all()
+        """
+        return self.SessionLocal()
 
     def _validate_database_dependencies(self, database_connect: str):
         """Validate that required database drivers are installed"""
@@ -485,9 +522,14 @@ class SQLAlchemyDatabaseManager:
                 logger.error("Failed to create database session")
                 return None
 
-            search_service = SearchService(session, self.database_type)
+            search_service = SearchService(
+                session,
+                self.database_type,
+                graph_search_service=self.graph_search_service
+            )
             logger.debug(
-                f"Created new search service instance for database type: {self.database_type}"
+                f"Created new search service instance for database type: {self.database_type} "
+                f"(graph_enabled={self.graph_search_service is not None})"
             )
             return search_service
 
@@ -618,12 +660,67 @@ class SQLAlchemyDatabaseManager:
                 session.commit()
 
                 logger.debug(f"Stored enhanced long-term memory {memory_id}")
-                return memory_id
 
             except SQLAlchemyError as e:
                 session.rollback()
                 logger.error(f"Failed to store enhanced long-term memory: {e}")
                 raise DatabaseError(f"Failed to store enhanced long-term memory: {e}")
+
+        # Automatic graph building (outside transaction to not fail memory storage)
+        try:
+            # Extract entities - but skip if already extracted
+            if self.entity_extractor:
+                # Check if entities already exist for this memory
+                with self.SessionLocal() as check_session:
+                    from sqlalchemy import text
+                    existing_count = check_session.execute(
+                        text("SELECT COUNT(*) FROM memory_entities WHERE memory_id = :memory_id"),
+                        {"memory_id": memory_id}
+                    ).scalar()
+
+                # Skip extraction if entities already exist
+                if existing_count > 0:
+                    logger.debug(
+                        f"Skipping entity extraction for {memory_id[:8]}... - {existing_count} entities already exist"
+                    )
+                else:
+                    logger.debug(f"Extracting entities for new memory {memory_id[:8]}...")
+                    entities = self.entity_extractor.extract_entities(
+                        memory_id=memory_id,
+                        memory_type="long_term",
+                        content=memory.content,
+                        namespace=namespace
+                    )
+
+                    if entities:
+                        with self.SessionLocal() as entity_session:
+                            saved_count = self.entity_extractor.save_entities(
+                                entities, entity_session
+                            )
+                            logger.debug(
+                                f"Extracted and saved {saved_count} entities for memory {memory_id[:8]}..."
+                            )
+
+            # Detect relationships
+            if self.relationship_detector:
+                relationships = self.relationship_detector.detect_relationships_for_memory(
+                    memory_id=memory_id,
+                    memory_type="long_term",
+                    namespace=namespace,
+                    max_candidates=50
+                )
+                logger.debug(
+                    f"Created {len(relationships)} relationships for memory {memory_id[:8]}..."
+                )
+
+        except Exception as graph_error:
+            # Don't fail memory storage if graph building fails
+            logger.warning(
+                f"Graph building failed for memory {memory_id[:8]}...: {graph_error}"
+            )
+            logger.debug("Graph building error details", exc_info=True)
+
+        return memory_id
 
     def search_memories(
         self,

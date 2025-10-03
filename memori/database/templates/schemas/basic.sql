@@ -84,6 +84,46 @@ CREATE TABLE IF NOT EXISTS long_term_memory (
     conscious_processed BOOLEAN DEFAULT 0  -- Processed for conscious context extraction
 );
 
+-- ======================================
+-- GRAPH-BASED SEARCH TABLES
+-- ======================================
+
+-- Memory Entities Table
+-- Stores extracted entities for graph-based search and relationship building
+CREATE TABLE IF NOT EXISTS memory_entities (
+    entity_id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    memory_type TEXT NOT NULL,  -- 'short_term' or 'long_term'
+    entity_type TEXT NOT NULL,  -- person, technology, topic, skill, project, keyword
+    entity_value TEXT NOT NULL,
+    normalized_value TEXT NOT NULL,  -- Lowercase for case-insensitive matching
+    relevance_score REAL DEFAULT 0.5,
+    namespace TEXT NOT NULL DEFAULT 'default',
+    frequency INTEGER DEFAULT 1,  -- How many times mentioned
+    created_at TIMESTAMP NOT NULL,
+    context TEXT  -- Additional context about this entity
+);
+
+-- Memory Relationships Table
+-- Stores graph relationships between memories for advanced traversal
+CREATE TABLE IF NOT EXISTS memory_relationships (
+    relationship_id TEXT PRIMARY KEY,
+    source_memory_id TEXT NOT NULL,
+    target_memory_id TEXT NOT NULL,
+    source_memory_type TEXT NOT NULL,  -- 'short_term' or 'long_term'
+    target_memory_type TEXT NOT NULL,
+    relationship_type TEXT NOT NULL,  -- semantic_similarity, causality, reference, etc.
+    strength REAL NOT NULL DEFAULT 0.5,  -- 0.0-1.0
+    bidirectional BOOLEAN DEFAULT 1,
+    namespace TEXT NOT NULL DEFAULT 'default',
+    created_at TIMESTAMP NOT NULL,
+    last_strengthened TIMESTAMP,  -- When strength was last updated
+    access_count INTEGER DEFAULT 0,  -- How often traversed
+    reasoning TEXT,  -- Why this relationship exists
+    shared_entity_count INTEGER DEFAULT 0,  -- Number of shared entities
+    metadata_json TEXT DEFAULT '{}'  -- Additional relationship metadata
+);
+
 -- Performance Indexes
 
 -- Chat History Indexes
@@ -118,6 +158,31 @@ CREATE INDEX IF NOT EXISTS idx_long_term_conscious_flags ON long_term_memory(is_
 CREATE INDEX IF NOT EXISTS idx_long_term_conscious_processed ON long_term_memory(conscious_processed);
 CREATE INDEX IF NOT EXISTS idx_long_term_duplicates ON long_term_memory(processed_for_duplicates);
 CREATE INDEX IF NOT EXISTS idx_long_term_confidence ON long_term_memory(confidence_score);
+
+-- Graph Entity Indexes (9 indexes for fast entity search)
+CREATE INDEX IF NOT EXISTS idx_entity_memory ON memory_entities(memory_id, memory_type);
+CREATE INDEX IF NOT EXISTS idx_entity_type ON memory_entities(entity_type);
+CREATE INDEX IF NOT EXISTS idx_entity_value ON memory_entities(entity_value);
+CREATE INDEX IF NOT EXISTS idx_entity_normalized ON memory_entities(normalized_value);
+CREATE INDEX IF NOT EXISTS idx_entity_namespace ON memory_entities(namespace);
+CREATE INDEX IF NOT EXISTS idx_entity_relevance ON memory_entities(relevance_score);
+CREATE INDEX IF NOT EXISTS idx_entity_type_value ON memory_entities(entity_type, normalized_value);
+CREATE INDEX IF NOT EXISTS idx_entity_namespace_type ON memory_entities(namespace, entity_type);
+CREATE INDEX IF NOT EXISTS idx_entity_compound ON memory_entities(namespace, entity_type, normalized_value, relevance_score);
+
+-- Graph Relationship Indexes (12 indexes for fast graph traversal)
+CREATE INDEX IF NOT EXISTS idx_rel_source ON memory_relationships(source_memory_id, source_memory_type);
+CREATE INDEX IF NOT EXISTS idx_rel_target ON memory_relationships(target_memory_id, target_memory_type);
+CREATE INDEX IF NOT EXISTS idx_rel_type ON memory_relationships(relationship_type);
+CREATE INDEX IF NOT EXISTS idx_rel_strength ON memory_relationships(strength);
+CREATE INDEX IF NOT EXISTS idx_rel_namespace ON memory_relationships(namespace);
+CREATE INDEX IF NOT EXISTS idx_rel_bidirectional ON memory_relationships(bidirectional);
+CREATE INDEX IF NOT EXISTS idx_rel_source_type ON memory_relationships(source_memory_id, relationship_type);
+CREATE INDEX IF NOT EXISTS idx_rel_target_type ON memory_relationships(target_memory_id, relationship_type);
+CREATE INDEX IF NOT EXISTS idx_rel_compound_source ON memory_relationships(source_memory_id, relationship_type, strength);
+CREATE INDEX IF NOT EXISTS idx_rel_compound_target ON memory_relationships(target_memory_id, relationship_type, strength);
+CREATE INDEX IF NOT EXISTS idx_rel_namespace_type ON memory_relationships(namespace, relationship_type, strength);
+CREATE INDEX IF NOT EXISTS idx_rel_entity_count ON memory_relationships(shared_entity_count);
 
 -- Full-Text Search Support (SQLite FTS5)
 -- Enables advanced text search capabilities

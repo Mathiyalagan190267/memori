@@ -24,37 +24,84 @@ class MemorySearchEngine:
     Uses OpenAI Structured Outputs to understand queries and plan searches.
     """
 
-    SYSTEM_PROMPT = """You are a Memory Search Agent responsible for understanding user queries and planning effective memory retrieval strategies.
+    SYSTEM_PROMPT = """You are an advanced Memory Search Agent with graph-based retrieval capabilities. You understand memory relationships and can plan multi-hop graph traversals.
 
 Your primary functions:
 1. **Analyze Query Intent**: Understand what the user is actually looking for
 2. **Extract Search Parameters**: Identify key entities, topics, and concepts
-3. **Plan Search Strategy**: Recommend the best approach to find relevant memories
-4. **Filter Recommendations**: Suggest appropriate filters for category, importance, etc.
+3. **Plan Graph Strategy**: Choose the best graph traversal approach
+4. **Configure Graph Expansion**: Set hop distance, relationship strength, and traversal strategy
 
-**MEMORY CATEGORIES AVAILABLE:**
-- **fact**: Factual information, definitions, technical details, specific data points
-- **preference**: User preferences, likes/dislikes, settings, personal choices, opinions
-- **skill**: Skills, abilities, competencies, learning progress, expertise levels
-- **context**: Project context, work environment, current situations, background info
-- **rule**: Rules, policies, procedures, guidelines, constraints
+**MEMORY CATEGORIES:**
+- **fact**: Factual information, definitions, technical details
+- **preference**: User preferences, likes/dislikes, opinions
+- **skill**: Skills, abilities, expertise levels
+- **context**: Project context, work environment, background
+- **rule**: Rules, policies, procedures, guidelines
 
-**SEARCH STRATEGIES:**
-- **keyword_search**: Direct keyword/phrase matching in content
-- **entity_search**: Search by specific entities (people, technologies, topics)
-- **category_filter**: Filter by memory categories
-- **importance_filter**: Filter by importance levels
-- **temporal_filter**: Search within specific time ranges
-- **semantic_search**: Conceptual/meaning-based search
+**GRAPH SEARCH STRATEGIES (choose one):**
 
-**QUERY INTERPRETATION GUIDELINES:**
-- "What did I learn about X?" → Focus on facts and skills related to X
-- "My preferences for Y" → Focus on preference category
-- "Rules about Z" → Focus on rule category
-- "Recent work on A" → Temporal filter + context/skill categories
-- "Important information about B" → Importance filter + keyword search
+1. **text_only** (~30ms)
+   - Use for: Simple keyword searches, no context needed
+   - Example: "Find memories containing 'API key'"
 
-Be strategic and comprehensive in your search planning."""
+2. **entity_first** (~100ms)
+   - Use for: Entity-tagged searches (people, technologies, topics)
+   - Example: "Show me everything about JWT", "What did Alice say?"
+
+3. **graph_expansion_1hop** (~150ms)
+   - Use for: Find directly related context (1-hop away)
+   - Example: "Tell me about X and related topics"
+
+4. **graph_expansion_2hop** (~300ms)
+   - Use for: Deep context discovery (2-hop away)
+   - Example: "Find everything connected to this project"
+
+5. **graph_walk_contextual** (~350ms)
+   - Use for: "Related to X" queries requiring max depth
+   - Example: "All memories related to authentication system"
+
+6. **entity_cluster_discovery** (~200ms)
+   - Use for: Multi-entity queries, finding shared context
+   - Example: "Memories about both JWT and OAuth"
+
+7. **category_focused_graph** (~180ms)
+   - Use for: Category filter + graph expansion
+   - Example: "Recent facts about Docker, with related context"
+
+**RELATIONSHIP TYPES (for filtering):**
+- semantic_similarity: Similar topics/concepts
+- causality: Cause and effect relationships
+- reference: One memory references another
+- elaboration: Provides more detail
+- supports: Reinforces/validates information
+- prerequisite: Required knowledge
+- temporal: Time-based relationships
+- related_entity: Share common entities
+
+**GRAPH EXPANSION PARAMETERS:**
+- **hop_distance**: 0-3 (0=no expansion, 1-3=multi-hop)
+- **min_relationship_strength**: 0.0-1.0 (filter weak relationships)
+- **expansion_strategy**: breadth_first, depth_first, strongest_first, entity_guided
+- **require_entity_overlap**: true/false (only traverse to memories sharing entities)
+
+**QUERY → STRATEGY EXAMPLES:**
+
+"What is JWT?" → text_only (simple definition)
+"Show me everything about JWT" → entity_first (entity-tagged search)
+"JWT and related auth topics" → graph_expansion_1hop (1-hop from JWT)
+"All authentication-related memories" → graph_walk_contextual (deep walk)
+"Memories about JWT and OAuth together" → entity_cluster_discovery
+"Recent Docker facts with context" → category_focused_graph
+
+**COMPLEX QUERY PLANNING:**
+- Single entity + context needed → entity_first or graph_expansion_1hop
+- Multiple related entities → entity_cluster_discovery
+- "Everything about X" → graph_walk_contextual with max hops
+- Category-specific with context → category_focused_graph
+- Simple lookup → text_only
+
+Be strategic and choose the right balance between speed and depth."""
 
     def __init__(
         self,
@@ -129,8 +176,12 @@ Be strategic and comprehensive in your search planning."""
                         logger.debug(f"Using cached search plan for: {query}")
                         return cached_result
 
-            # Prepare the prompt
-            prompt = f"User query: {query}"
+            # Prepare the prompt - clean query first to prevent duplication
+            cleaned_query = query.strip()
+            while cleaned_query.lower().startswith("user query:"):
+                cleaned_query = cleaned_query[11:].strip()
+
+            prompt = f"User query: {cleaned_query}"
             if context:
                 prompt += f"\nAdditional context: {context}"
 
@@ -635,8 +686,12 @@ Be strategic and comprehensive in your search planning."""
         but doesn't support structured outputs (like Ollama, local models, etc.)
         """
         try:
-            # Prepare the prompt from raw query
-            prompt = f"User query: {query}"
+            # Prepare the prompt from raw query - clean query first to prevent duplication
+            cleaned_query = query.strip()
+            while cleaned_query.lower().startswith("user query:"):
+                cleaned_query = cleaned_query[11:].strip()
+
+            prompt = f"User query: {cleaned_query}"
 
             # Enhanced system prompt for JSON output
             json_system_prompt = (
@@ -729,6 +784,25 @@ Be strategic and comprehensive in your search planning."""
                     except ValueError:
                         logger.debug(f"Invalid category filter '{cat_str}', skipping")
 
+            # Handle search_strategy - LLM might return list or string
+            raw_strategy = data.get("search_strategy", "text_only")
+            if isinstance(raw_strategy, list):
+                # Take first strategy if list provided
+                strategy_str = raw_strategy[0] if raw_strategy else "text_only"
+            else:
+                strategy_str = raw_strategy
+
+            # Convert to enum, fallback to TEXT_ONLY if invalid
+            from ..utils.pydantic_models import SearchStrategy
+            try:
+                if isinstance(strategy_str, str):
+                    search_strategy_enum = SearchStrategy(strategy_str.lower())
+                else:
+                    search_strategy_enum = SearchStrategy.TEXT_ONLY
+            except (ValueError, AttributeError):
+                logger.debug(f"Invalid search strategy '{strategy_str}', using TEXT_ONLY")
+                search_strategy_enum = SearchStrategy.TEXT_ONLY
+
             # Create search query object with proper validation
             search_query = MemorySearchQuery(
                 query_text=data.get("query_text", original_query),
@@ -739,7 +813,7 @@ Be strategic and comprehensive in your search planning."""
                 min_importance=max(
                     0.0, min(1.0, float(data.get("min_importance", 0.0)))
                 ),
-                search_strategy=data.get("search_strategy", ["keyword_search"]),
+                search_strategy=search_strategy_enum,
                 expected_result_types=data.get("expected_result_types", ["any"]),
             )
 

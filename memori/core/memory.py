@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -26,7 +26,12 @@ from ..config.settings import LoggingSettings, LogLevel
 from ..database.sqlalchemy_manager import SQLAlchemyDatabaseManager
 from ..utils.exceptions import DatabaseError, MemoriError
 from ..utils.logging import LoggingManager
-from ..utils.pydantic_models import ConversationContext
+from ..utils.pydantic_models import (
+    ConversationContext,
+    GraphExpansionConfig,
+    ScoringWeights,
+    SearchStrategy,
+)
 from .conversation import ConversationManager
 
 
@@ -67,6 +72,7 @@ class Memori:
         database_prefix: str | None = None,  # Database name prefix
         database_suffix: str | None = None,  # Database name suffix
         conscious_memory_limit: int = 10,  # Limit for conscious memory processing
+        graph_search: bool = False,  # Use graph-based search by default
     ):
         """
         Initialize Memori memory system v1.0.
@@ -97,6 +103,8 @@ class Memori:
             enable_auto_creation: Enable automatic database creation if database doesn't exist
             database_prefix: Optional prefix for database name (for multi-tenant setups)
             database_suffix: Optional suffix for database name (e.g., 'dev', 'prod', 'test')
+            conscious_memory_limit: Maximum number of memories to process for conscious context
+            graph_search: Use graph-based search by default (enables entity and relationship traversal)
         """
         self.database_connect = database_connect
         self.template = template
@@ -111,6 +119,7 @@ class Memori:
         self.schema_init = schema_init
         self.database_prefix = database_prefix
         self.database_suffix = database_suffix
+        self.graph_search = graph_search
         # Validate conscious_memory_limit parameter
         if not isinstance(conscious_memory_limit, int) or conscious_memory_limit < 1:
             raise ValueError("conscious_memory_limit must be a positive integer")
@@ -246,6 +255,53 @@ class Memori:
             logger.info(
                 f"Agents initialized successfully with model: {effective_model}"
             )
+
+            # Initialize graph-based search components
+            try:
+                from ..database.graph_search_service import GraphSearchService
+                from ..processors import (
+                    EntityExtractionService,
+                    RelationshipDetectionService,
+                )
+
+                self.graph_search_service = GraphSearchService(self.db_manager)
+
+                # Initialize entity extraction (using smaller model for speed)
+                if self.provider_config:
+                    client = self.provider_config.create_client()
+                else:
+                    import openai
+
+                    client = openai.OpenAI(api_key=self.openai_api_key)
+
+                self.entity_extractor = EntityExtractionService(
+                    client=client, model="gpt-4o-mini"
+                )
+
+                self.relationship_detector = RelationshipDetectionService(
+                    db_manager=self.db_manager
+                )
+
+                logger.info("Graph components initialized successfully")
+
+                # Connect graph components to database manager
+                if hasattr(self.db_manager, 'set_graph_components'):
+                    self.db_manager.set_graph_components(
+                        graph_search_service=self.graph_search_service,
+                        entity_extractor=self.entity_extractor,
+                        relationship_detector=self.relationship_detector
+                    )
+                    logger.debug("Graph components connected to database manager")
+
+            except Exception as graph_error:
+                logger.warning(
+                    f"Graph components initialization failed: {graph_error}. "
+                    "Graph-based search will not be available."
+                )
+                self.graph_search_service = None
+                self.entity_extractor = None
+                self.relationship_detector = None
+
         except ImportError as e:
             logger.warning(
                 f"Failed to import LLM agents: {e}. Memory ingestion disabled."
@@ -807,6 +863,17 @@ class Memori:
     def _inject_openai_context(self, kwargs):
         """Inject context for OpenAI calls based on ingest mode using ConversationManager"""
         try:
+            # Check if we're in a recursion guard - if so, skip injection entirely
+            if hasattr(self, "_in_context_retrieval") and self._in_context_retrieval:
+                logger.debug("OpenAI context injection skipped - inside retrieval operation")
+                return kwargs
+
+            # Check for system-only messages (internal operations) - skip injection
+            messages = kwargs.get("messages", [])
+            if messages and len(messages) == 1 and messages[0].get("role") == "system":
+                logger.debug("OpenAI context injection skipped - internal system operation")
+                return kwargs
+
             # Check for deferred conscious initialization
             self._check_deferred_initialization()
 
@@ -1194,7 +1261,36 @@ class Memori:
                 f"Auto-ingest: Starting context retrieval for query: '{user_input[:50]}...' in namespace: '{self.namespace}'"
             )
 
-            # Always try direct database search first as it's more reliable
+            # Use graph search if enabled, otherwise use direct database search
+            if self.graph_search:
+                logger.debug("Auto-ingest: Using graph-based search (graph_search=True)")
+                try:
+                    # Use the search() method which has graph search logic
+                    results = self.search(query=user_input, limit=5)
+                    logger.debug(
+                        f"Auto-ingest: Graph search returned {len(results) if results else 0} results"
+                    )
+
+                    if results:
+                        for i, result in enumerate(
+                            results[:3]
+                        ):  # Log first 3 results for debugging
+                            logger.debug(
+                                f"Auto-ingest: Result {i+1}: {type(result)} with keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}"
+                            )
+
+                        # Add search metadata
+                        for result in results:
+                            if isinstance(result, dict):
+                                result["retrieval_method"] = "graph_search"
+                                result["retrieval_query"] = user_input
+                        return results
+                except Exception as graph_search_e:
+                    logger.warning(f"Auto-ingest: Graph search failed: {graph_search_e}")
+                    logger.debug("Auto-ingest: Falling back to direct database search")
+                    results = []
+
+            # Direct database search (default or fallback)
             logger.debug("Auto-ingest: Using direct database search (primary method)")
             logger.debug(
                 f"Auto-ingest: Database manager type: {type(self.db_manager).__name__}"
@@ -2455,11 +2551,32 @@ class Memori:
             metadata=metadata or {"type": "manual_memory", "source": "add_method"},
         )
 
+    def _get_memory_count(self) -> int:
+        """Get total count of long-term memories in database"""
+        try:
+            with self.db_manager.get_session() as session:
+                from ..database.models import LongTermMemory
+
+                count = (
+                    session.query(LongTermMemory)
+                    .filter(LongTermMemory.namespace == self.namespace)
+                    .count()
+                )
+                return count
+        except Exception as e:
+            logger.warning(f"Failed to get memory count: {e}")
+            return 0
+
     def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """
         Search for memories/conversations based on a query.
 
         This is a unified method that works with both SQL and MongoDB backends.
+
+        **Automatic Search Strategy:**
+        - When memories < 10: Uses text-based search (graph not useful yet)
+        - When memories >= 10: Uses graph-based search with entity and relationship traversal
+        - If graph_search=True is explicitly set, respects that setting
 
         Args:
             query: Search query string
@@ -2473,8 +2590,154 @@ class Memori:
             return []
 
         try:
-            # Use the existing retrieve_context method for consistency
-            return self.retrieve_context(query, limit=limit)
+            # Clean the query - remove "User query:" prefix if present (prevents recursion issues)
+            cleaned_query = query.strip()
+            while cleaned_query.lower().startswith("user query:"):
+                cleaned_query = cleaned_query[11:].strip()
+
+            # Use cleaned query for search
+            search_query = cleaned_query if cleaned_query else query
+
+            # Determine if we should use graph search (automatic or explicit)
+            memory_count = self._get_memory_count()
+            use_graph = False
+
+            if hasattr(self, 'graph_search_service') and self.graph_search_service:
+                if hasattr(self, 'graph_search') and self.graph_search:
+                    # Explicit graph_search=True parameter
+                    use_graph = memory_count >= 5
+                    if memory_count < 5:
+                        logger.debug(
+                            f"graph_search=True but only {memory_count} memories (need 5+), using text search"
+                        )
+                elif memory_count >= 10:
+                    # Automatic graph search when enough memories
+                    use_graph = True
+                    logger.debug(
+                        f"Auto-enabling graph search ({memory_count} memories >= 10 threshold)"
+                    )
+
+            # Use graph search if conditions are met
+            if use_graph:
+                try:
+                    logger.debug(f"Using graph-based search for query: '{search_query}'")
+
+                    entity_filters: list[str] = []
+                    category_filters: list[str] = []
+                    graph_strategy = SearchStrategy.GRAPH_EXPANSION_1HOP
+                    hop_distance = 1
+                    scoring_weights = None
+                    graph_config: Optional[GraphExpansionConfig] = GraphExpansionConfig(
+                        enabled=True,
+                        hop_distance=hop_distance,
+                        min_relationship_strength=0.2,
+                    )
+
+                    if self.search_engine:
+                        try:
+                            plan = self.search_engine.plan_search(search_query)
+                            entity_filters = plan.entity_filters or []
+                            category_filters = [c.value for c in plan.category_filters]
+
+                            raw_strategies = plan.search_strategy or []
+
+                            def _normalize_strategy(value: Any) -> str:
+                                if hasattr(value, "value"):
+                                    return str(value.value)
+                                if isinstance(value, str):
+                                    return value
+                                return str(value)
+
+                            requested_strategies = {
+                                _normalize_strategy(s).lower() for s in raw_strategies
+                            }
+
+                            if "text_only" in requested_strategies:
+                                graph_strategy = SearchStrategy.TEXT_ONLY
+                                graph_config = None
+                                entity_filters = []
+                                category_filters = []
+                            elif {
+                                "graph_walk",
+                                "graph_traversal",
+                                "graph_context",
+                            } & requested_strategies:
+                                graph_strategy = SearchStrategy.GRAPH_WALK_CONTEXTUAL
+                                hop_distance = 3
+                            elif "graph_expansion" in requested_strategies:
+                                graph_strategy = SearchStrategy.GRAPH_EXPANSION_2HOP
+                                hop_distance = 2
+                            elif "entity_search" in requested_strategies and entity_filters:
+                                graph_strategy = SearchStrategy.ENTITY_FIRST
+                                graph_config = None
+                            elif (
+                                "category_filter" in requested_strategies
+                                and category_filters
+                            ):
+                                graph_strategy = SearchStrategy.CATEGORY_FOCUSED_GRAPH
+                                hop_distance = 1
+
+                            if graph_config is not None and graph_strategy != SearchStrategy.TEXT_ONLY:
+                                graph_config = graph_config.copy(update={"hop_distance": hop_distance})
+
+                        except Exception as plan_error:
+                            logger.debug(
+                                f"Search planner unavailable or failed: {plan_error}"
+                            )
+
+                    if graph_strategy == SearchStrategy.TEXT_ONLY:
+                        logger.debug("Plan requested TEXT_ONLY search; using direct retrieval")
+                        text_results = self.retrieve_context(search_query, limit=limit)
+                        if text_results:
+                            return text_results
+                        logger.debug("TEXT_ONLY retrieval returned no results, continuing to graph fallback")
+
+                    # Use GraphSearchService directly
+                    graph_results = self.graph_search_service.search(
+                        query_text=search_query,
+                        strategy=graph_strategy,
+                        namespace=self.namespace,
+                        entities=entity_filters,
+                        categories=category_filters,
+                        graph_expansion=graph_config,
+                        scoring_weights=scoring_weights,
+                        max_results=limit
+                    )
+
+                    if graph_results:
+                        logger.debug(f"Graph search returned {len(graph_results)} results")
+
+                        # Convert GraphSearchResult objects to dict format
+                        results = []
+                        for r in graph_results:
+                            results.append({
+                                'memory_id': r.memory_id,
+                                'summary': r.summary,
+                                'content': r.content,
+                                'importance_score': r.importance_score,
+                                'created_at': r.timestamp,
+                                'category_primary': r.category.value if r.category else None,
+                                'composite_score': r.composite_score,
+                                'search_strategy': 'graph_search',
+                                # Graph metadata
+                                'hop_distance': r.hop_distance,
+                                'shared_entities': r.shared_entities,
+                                'match_reason': r.match_reason,
+                                'graph_strength_score': r.graph_strength_score,
+                                'entity_overlap_score': r.entity_overlap_score,
+                            })
+
+                        return results
+
+                    logger.debug("Graph search returned no results, falling back to text search")
+
+                except Exception as graph_error:
+                    logger.warning(f"Graph search failed, falling back to text search: {graph_error}")
+                    logger.debug("Graph search error details", exc_info=True)
+
+            # Fall back to traditional text search
+            return self.retrieve_context(search_query, limit=limit)
+
         except Exception as e:
             logger.error(f"Search failed: {e}")
             return []
