@@ -26,10 +26,10 @@ Usage:
     # Conversation is automatically recorded to Memori
 """
 
+import inspect
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-import inspect
-from typing import Iterator
 
 from loguru import logger
 
@@ -263,7 +263,7 @@ class OpenAIInterceptor:
     @classmethod
     def _bind_client_to_instance(cls, client, memori_instance):
         try:
-            setattr(client, "_memori_instance_id", memori_instance._session_id)
+            client._memori_instance_id = memori_instance._session_id
         except Exception:
             logger.debug("Failed to bind Memori instance to OpenAI client")
 
@@ -295,7 +295,9 @@ class OpenAIInterceptor:
     def _inject_context_for_enabled_instances(cls, options, client_type, client=None):
         """Inject context for the Memori instance associated with the current client."""
         if inspect.iscoroutine(options):
-            logger.debug("OpenAI: Received coroutine options; skipping context injection")
+            logger.debug(
+                "OpenAI: Received coroutine options; skipping context injection"
+            )
             return options
 
         target_instances = cls._select_target_instances(client)
@@ -341,7 +343,9 @@ class OpenAIInterceptor:
                             f"OpenAI: Successfully injected context for {client_type}"
                         )
 
-                        _safe_setattr(options, "_memori_instance_id", memori_instance._session_id)
+                        _safe_setattr(
+                            options, "_memori_instance_id", memori_instance._session_id
+                        )
                         if client:
                             cls._bind_client_to_instance(client, memori_instance)
                         break
@@ -403,7 +407,9 @@ class OpenAIInterceptor:
             return
 
         if inspect.iscoroutine(options):
-            logger.debug("OpenAI: Received coroutine options during recording; skipping")
+            logger.debug(
+                "OpenAI: Received coroutine options during recording; skipping"
+            )
             return
 
         json_data = getattr(options, "json_data", None) or {}
@@ -452,7 +458,9 @@ class OpenAIInterceptor:
                         )
 
                     if not instance_id:
-                        _safe_setattr(options, "_memori_instance_id", memori_instance._session_id)
+                        _safe_setattr(
+                            options, "_memori_instance_id", memori_instance._session_id
+                        )
                         if client is not None:
                             cls._bind_client_to_instance(client, memori_instance)
                         instance_id = memori_instance._session_id
@@ -461,7 +469,9 @@ class OpenAIInterceptor:
                         memori_instance._record_openai_conversation(json_data, response)
                 elif "prompt" in json_data:
                     if not instance_id:
-                        _safe_setattr(options, "_memori_instance_id", memori_instance._session_id)
+                        _safe_setattr(
+                            options, "_memori_instance_id", memori_instance._session_id
+                        )
                         if client is not None:
                             cls._bind_client_to_instance(client, memori_instance)
                         instance_id = memori_instance._session_id
@@ -601,7 +611,9 @@ def register_memori_instance(memori_instance):
     try:
         set_current_memori_instance(memori_instance)
     except Exception:
-        logger.debug("Failed to set current Memori instance context during registration")
+        logger.debug(
+            "Failed to set current Memori instance context during registration"
+        )
 
     # Ensure OpenAI is patched
     OpenAIInterceptor.patch_openai()

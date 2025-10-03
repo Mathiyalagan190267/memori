@@ -6,6 +6,7 @@ import asyncio
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Any
 
@@ -28,6 +29,7 @@ from ..integrations.openai_integration import (
     activate_memori_instance,
     suppress_auto_recording,
 )
+from ..utils.cache import ContextCache
 from ..utils.exceptions import DatabaseError, MemoriError
 from ..utils.logging import LoggingManager
 from ..utils.pydantic_models import ConversationContext
@@ -133,6 +135,9 @@ class Memori:
         self._processing_window_start = time.time()
         self._processing_count = 0
 
+        # Setup logging FIRST before any operations that might log
+        self._setup_logging()
+
         # Configure provider based on explicit settings ONLY - no auto-detection
         if provider_config:
             # Use provided configuration
@@ -204,9 +209,6 @@ class Memori:
         self.openai_api_key = api_key or openai_api_key or ""
         if self.provider_config and hasattr(self.provider_config, "api_key"):
             self.openai_api_key = self.provider_config.api_key or self.openai_api_key
-
-        # Setup logging based on verbose mode
-        self._setup_logging()
 
         # Initialize database manager (detect MongoDB vs SQL)
         self.db_manager = self._create_database_manager(
@@ -290,6 +292,17 @@ class Memori:
         self.conversation_manager = ConversationManager(
             max_sessions=100, session_timeout_minutes=60, max_history_per_session=20
         )
+
+        # Initialize context cache for performance optimization
+        # Increased cache size and TTL for remote DB to reduce network round trips
+        self._context_cache = ContextCache(max_size=500, ttl_seconds=600)
+        logger.info("Context cache initialized for performance optimization")
+
+        # Initialize thread pool for background memory processing (max 3 concurrent tasks)
+        self._memory_executor = ThreadPoolExecutor(
+            max_workers=3, thread_name_prefix="memori-bg"
+        )
+        logger.info("Background processing thread pool initialized (max_workers=3)")
 
         # User context for memory processing
         self._user_context = {
@@ -1178,6 +1191,7 @@ class Memori:
         """
         Get auto-ingest context using retrieval agent for intelligent search.
         Searches through entire database for relevant memories.
+        Results are cached for performance.
         """
         try:
             # Early validation
@@ -1186,6 +1200,13 @@ class Memori:
                     "Auto-ingest: No user input provided, returning empty context"
                 )
                 return []
+
+            # Check cache first (before recursion guard)
+            cached_context = self._context_cache.get_context(
+                self.namespace, user_input, "auto"
+            )
+            if cached_context is not None:
+                return cached_context
 
             # Check for recursion guard to prevent infinite loops
             if hasattr(self, "_in_context_retrieval") and self._in_context_retrieval:
@@ -1245,6 +1266,14 @@ class Memori:
                     if isinstance(result, dict):
                         result["retrieval_method"] = "direct_database_search"
                         result["retrieval_query"] = user_input
+
+                # Cache the results before returning (graceful failure if oversized)
+                try:
+                    self._context_cache.set_context(
+                        self.namespace, user_input, "auto", results
+                    )
+                except ValueError as e:
+                    logger.warning(f"Context cache rejected oversized value: {e}")
                 return results
 
             # If direct search fails, try search engine as backup
@@ -1792,7 +1821,6 @@ class Memori:
 
         try:
             # Run async processing in new event loop
-            import threading
 
             def run_memory_processing():
                 """Run memory processing with improved event loop management"""
@@ -1883,11 +1911,10 @@ class Memori:
                     except:
                         pass
 
-            # Run in background thread to avoid blocking
-            thread = threading.Thread(target=run_memory_processing, daemon=True)
-            thread.start()
+            # Use thread pool instead of creating new thread
+            self._memory_executor.submit(run_memory_processing)
             logger.debug(
-                f"Memory processing started in background thread for {chat_id} (attempt {retry_count + 1})"
+                f"Memory processing submitted to thread pool for {chat_id} (attempt {retry_count + 1})"
             )
 
         except Exception as e:
@@ -2086,16 +2113,18 @@ class Memori:
                 # Process conversation using async Pydantic-based memory agent
                 try:
                     with suppress_auto_recording():
-                        processed_memory = await self.memory_agent.process_conversation_async(
-                            chat_id=chat_id,
-                            user_input=user_input,
-                            ai_output=ai_output,
-                            context=context,
-                            existing_memories=(
-                                [mem.summary for mem in existing_memories[:10]]
-                                if existing_memories
-                                else []
-                            ),
+                        processed_memory = (
+                            await self.memory_agent.process_conversation_async(
+                                chat_id=chat_id,
+                                user_input=user_input,
+                                ai_output=ai_output,
+                                context=context,
+                                existing_memories=(
+                                    [mem.summary for mem in existing_memories[:10]]
+                                    if existing_memories
+                                    else []
+                                ),
+                            )
                         )
                 except Exception as e:
                     logger.error(f"Memory ingestion failed for {chat_id}: {e}")
@@ -2123,7 +2152,9 @@ class Memori:
                 )
 
                 if memory_id:
-                    logger.debug(f"Stored processed memory {memory_id} for chat {chat_id}")
+                    logger.debug(
+                        f"Stored processed memory {memory_id} for chat {chat_id}"
+                    )
 
                     # Check for conscious context updates if promotion eligible and conscious_ingest enabled
                     if (
@@ -2545,9 +2576,66 @@ class Memori:
                         task.cancel()
                 self._memory_tasks.clear()
 
+            # Shutdown thread pool executor with custom timeout implementation
+            if hasattr(self, "_memory_executor"):
+                logger.debug("Shutting down background processing thread pool...")
+                try:
+                    # Implement custom timeout using threading
+                    # Python's ThreadPoolExecutor.shutdown() doesn't have timeout parameter
+                    shutdown_thread = threading.Thread(
+                        target=lambda: self._memory_executor.shutdown(wait=True),
+                        name="executor-shutdown",
+                        daemon=False,
+                    )
+                    shutdown_thread.start()
+
+                    # Wait for shutdown with 5 second timeout
+                    shutdown_thread.join(timeout=5.0)
+
+                    if shutdown_thread.is_alive():
+                        # Timeout occurred
+                        logger.warning(
+                            "Thread pool shutdown timed out after 5s, forcing termination"
+                        )
+                        # Cancel pending futures (Python 3.9+)
+                        try:
+                            self._memory_executor.shutdown(
+                                wait=False, cancel_futures=True
+                            )
+                            logger.warning(
+                                "Forced executor shutdown with cancel_futures=True"
+                            )
+                        except TypeError:
+                            # Python < 3.9 doesn't have cancel_futures parameter
+                            self._memory_executor.shutdown(wait=False)
+                            logger.warning(
+                                "Forced executor shutdown (Python < 3.9, no cancel_futures)"
+                            )
+
+                        # Log remaining threads
+                        for thread in threading.enumerate():
+                            if thread.name.startswith("memori-bg"):
+                                logger.warning(
+                                    f"Background thread still running: {thread.name}"
+                                )
+                    else:
+                        logger.debug("Thread pool shutdown completed gracefully")
+
+                except Exception as shutdown_error:
+                    logger.error(
+                        f"Thread pool shutdown error: {shutdown_error}", exc_info=True
+                    )
+
+            # Shutdown cache cleanup threads
+            if hasattr(self, "_context_cache"):
+                try:
+                    self._context_cache._cache.shutdown()
+                except Exception as cache_error:
+                    logger.error(f"Context cache shutdown error: {cache_error}")
+
             logger.debug("Memori cleanup completed")
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error(f"Error during cleanup: {e}", exc_info=True)
 
     def __del__(self):
         """Destructor to ensure cleanup"""
