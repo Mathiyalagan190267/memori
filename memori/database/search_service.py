@@ -487,8 +487,13 @@ class SearchService:
             )
 
             # Prepare query for tsquery - handle spaces and special characters
-            # Convert simple query to tsquery format (join words with &)
-            tsquery_text = " & ".join(query.split())
+            # Remove/sanitize special characters that cause tsquery syntax errors
+            import re
+
+            # Remove special characters, keep only alphanumeric and spaces
+            sanitized_query = re.sub(r"[^\w\s]", " ", query)
+            # Convert to tsquery format (join words with &)
+            tsquery_text = " & ".join(sanitized_query.split())
 
             # Search short-term memory if requested
             if search_short_term:
