@@ -408,6 +408,10 @@ Explore Memori's capabilities through these interactive demonstrations:
 - See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 - Community: [Discord](https://www.gibsonai.com/discord)
 
+## ⭐️ Star us on GitHub to support the project 
+
+[![Star History Chart](https://api.star-history.com/svg?repos=GibsonAI/memori&type=date&legend=top-left)](https://www.star-history.com/#GibsonAI/memori&type=date&legend=top-left)
+
 ## 📄 License
 
 MIT License - see [LICENSE](./LICENSE) for details.
