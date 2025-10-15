@@ -1,11 +1,9 @@
-# Contributing t## 🛠️ Development Setup Memori
+# Contributing
 
-We welcome contributions to Memori! This document provides guidelines for contributing to the projec## 🐛 Bug Reports
+We welcome contributions to Memori! This document provides guidelines for contributing to the project.
 
-When reporting bugs, please include:
-## 🚀 Quick Start## 🚀 Re## 👥 Community
+## 🚀 Quick Start
 
-- **Be respectful** and inclusivese Process
 1. **Fork** the repository
 2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/memori.git`
 3. **Create** a branch: `git checkout -b feature/your-feature-name`
@@ -16,7 +14,7 @@ When reporting bugs, please include:
 8. **Commit** and **push** your changes
 9. **Create** a pull request
 
-## =� Development Setup
+## 🛠️ Development Setup Memori
 
 ### Prerequisites
 - Python 3.8 or higher
@@ -251,6 +249,7 @@ By contributing to Memori, you agree that your contributions will be licensed un
 ## 🏆 Recognition
 
 Contributors will be recognized in:
+- On the [Memori website](https://memori.gibsonai.com/contributors)
 - `CHANGELOG.md` for their contributions
 - GitHub contributors list
 - Release notes for significant contributions
