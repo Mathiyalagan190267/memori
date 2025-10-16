@@ -749,15 +749,6 @@ class Memori:
 
         logger.info("\n".join(status_info))
 
-        # Friendly reminder to support Memori OSS
-        logger.info(
-            "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "⭐️ If Memori helped you, please give us a star!\n"
-            "👉 https://github.com/GibsonAI/memori\n"
-            "Your support helps us build better open AI memory tools ❤️\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        )
-
     def disable(self):
         """
         Disable memory recording by unregistering LiteLLM callbacks and OpenAI interception.
@@ -986,9 +977,7 @@ class Memori:
                             f"Conscious-ingest: Injected {len(context)} short-term memories as initial context"
                         )
                     else:
-                        context = (
-                            []
-                        )  # Already injected, don't inject again - this is the key difference from auto_ingest
+                        context = []  # Already injected, don't inject again - this is the key difference from auto_ingest
                 elif mode == "auto":
                     # Auto mode: use retrieval agent for intelligent database search
                     if self.search_engine:
@@ -1222,7 +1211,7 @@ class Memori:
                         results[:3]
                     ):  # Log first 3 results for debugging
                         logger.debug(
-                            f"Auto-ingest: Result {i+1}: {type(result)} with keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}"
+                            f"Auto-ingest: Result {i + 1}: {type(result)} with keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}"
                         )
             except Exception as db_search_e:
                 logger.error(f"Auto-ingest: Database search failed: {db_search_e}")
