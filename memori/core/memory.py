@@ -977,7 +977,9 @@ class Memori:
                             f"Conscious-ingest: Injected {len(context)} short-term memories as initial context"
                         )
                     else:
-                        context = []  # Already injected, don't inject again - this is the key difference from auto_ingest
+                        context = (
+                            []
+                        )  # Already injected, don't inject again - this is the key difference from auto_ingest
                 elif mode == "auto":
                     # Auto mode: use retrieval agent for intelligent database search
                     if self.search_engine:
