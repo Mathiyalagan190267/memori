@@ -749,6 +749,15 @@ class Memori:
 
         logger.info("\n".join(status_info))
 
+        # Friendly reminder to support Memori OSS
+        logger.info(
+            "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⭐️ If Memori helped you, please give us a star!\n"
+            "👉 https://github.com/GibsonAI/memori\n"
+            "Your support helps us build better open AI memory tools ❤️\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+
     def disable(self):
         """
         Disable memory recording by unregistering LiteLLM callbacks and OpenAI interception.
