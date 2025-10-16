@@ -31,6 +31,12 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/GibsonAI/memori/stargazers">
+    <img src="https://img.shields.io/badge/⭐%20Give%20a%20Star-Support%20the%20project-orange?style=for-the-badge" alt="Give a Star">
+  </a>
+</p>
+
 ---
 
 ## What is Memori
@@ -108,6 +114,8 @@ print("\n💡 Notice: Memori automatically knows about your FastAPI Python proje
 ```
 
 ---
+
+⭐️ **Enjoying Memori?** Give us a star to support open development
 
 > By default, Memori uses in-memory SQLite database. Get **FREE** serverless database instance in [GibsonAI](https://app.gibsonai.com/signup) platform.
 
