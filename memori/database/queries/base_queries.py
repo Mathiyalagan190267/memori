@@ -3,24 +3,23 @@ Base database queries and schema operations
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict
 
 
 class BaseQueries(ABC):
     """Abstract base class for database queries"""
 
     @abstractmethod
-    def get_table_creation_queries(self) -> Dict[str, str]:
+    def get_table_creation_queries(self) -> dict[str, str]:
         """Return dictionary of table creation SQL statements"""
         pass
 
     @abstractmethod
-    def get_index_creation_queries(self) -> Dict[str, str]:
+    def get_index_creation_queries(self) -> dict[str, str]:
         """Return dictionary of index creation SQL statements"""
         pass
 
     @abstractmethod
-    def get_trigger_creation_queries(self) -> Dict[str, str]:
+    def get_trigger_creation_queries(self) -> dict[str, str]:
         """Return dictionary of trigger creation SQL statements"""
         pass
 

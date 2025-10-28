@@ -3,7 +3,7 @@ MySQL connector for Memori v2.0
 Implements BaseDatabaseConnector interface with FULLTEXT search support
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -15,7 +15,7 @@ from .base_connector import BaseDatabaseConnector, DatabaseType
 class MySQLConnector(BaseDatabaseConnector):
     """MySQL database connector with FULLTEXT search support"""
 
-    def __init__(self, connection_config: Dict[str, Any]):
+    def __init__(self, connection_config: dict[str, Any]):
         self._mysql = None
         self._setup_mysql()
         super().__init__(connection_config)
@@ -36,7 +36,7 @@ class MySQLConnector(BaseDatabaseConnector):
         """Detect database type from connection config"""
         return DatabaseType.MYSQL
 
-    def _parse_connection_string(self, connection_string: str) -> Dict[str, Any]:
+    def _parse_connection_string(self, connection_string: str) -> dict[str, Any]:
         """Parse MySQL connection string into connection config"""
         if connection_string.startswith("mysql://"):
             parsed = urlparse(connection_string)
@@ -92,8 +92,8 @@ class MySQLConnector(BaseDatabaseConnector):
             raise DatabaseError(f"Failed to connect to MySQL database: {e}")
 
     def execute_query(
-        self, query: str, params: Optional[List[Any]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list[Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a query and return results"""
         try:
             with self.get_connection() as conn:
@@ -112,7 +112,7 @@ class MySQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute query: {e}")
 
-    def execute_insert(self, query: str, params: Optional[List[Any]] = None) -> str:
+    def execute_insert(self, query: str, params: list[Any] | None = None) -> str:
         """Execute an insert query and return the inserted row ID"""
         try:
             with self.get_connection() as conn:
@@ -132,7 +132,7 @@ class MySQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute insert: {e}")
 
-    def execute_update(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_update(self, query: str, params: list[Any] | None = None) -> int:
         """Execute an update query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -152,7 +152,7 @@ class MySQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute update: {e}")
 
-    def execute_delete(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_delete(self, query: str, params: list[Any] | None = None) -> int:
         """Execute a delete query and return number of affected rows"""
         try:
             with self.get_connection() as conn:
@@ -172,9 +172,7 @@ class MySQLConnector(BaseDatabaseConnector):
         except Exception as e:
             raise DatabaseError(f"Failed to execute delete: {e}")
 
-    def execute_transaction(
-        self, queries: List[Tuple[str, Optional[List[Any]]]]
-    ) -> bool:
+    def execute_transaction(self, queries: list[tuple[str, list[Any] | None]]) -> bool:
         """Execute multiple queries in a transaction"""
         try:
             with self.get_connection() as conn:
@@ -215,7 +213,7 @@ class MySQLConnector(BaseDatabaseConnector):
             logger.error(f"MySQL connection test failed: {e}")
             return False
 
-    def initialize_schema(self, schema_sql: Optional[str] = None):
+    def initialize_schema(self, schema_sql: str | None = None):
         """Initialize database schema"""
         try:
             if not schema_sql:
@@ -256,7 +254,7 @@ class MySQLConnector(BaseDatabaseConnector):
             logger.error(f"Failed to initialize MySQL schema: {e}")
             raise DatabaseError(f"Failed to initialize MySQL schema: {e}")
 
-    def _split_mysql_statements(self, schema_sql: str) -> List[str]:
+    def _split_mysql_statements(self, schema_sql: str) -> list[str]:
         """Split SQL schema into individual statements handling MySQL syntax"""
         statements = []
         current_statement = []
@@ -320,13 +318,13 @@ class MySQLConnector(BaseDatabaseConnector):
             return False
 
     def create_full_text_index(
-        self, table: str, columns: List[str], index_name: str
+        self, table: str, columns: list[str], index_name: str
     ) -> str:
         """Create MySQL FULLTEXT index"""
         columns_str = ", ".join(columns)
         return f"ALTER TABLE {table} ADD FULLTEXT INDEX {index_name} ({columns_str})"
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get MySQL database information and capabilities"""
         try:
             with self.get_connection() as conn:

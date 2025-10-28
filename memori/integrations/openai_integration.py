@@ -246,25 +246,18 @@ class OpenAIInterceptor:
     def _is_internal_agent_call(cls, json_data):
         """Check if this is an internal agent processing call that should not be recorded."""
         try:
-            messages = json_data.get("messages", [])
-            for message in messages:
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    # Check for internal agent processing patterns
-                    internal_patterns = [
-                        "Process this conversation for enhanced memory storage:",
-                        "User query:",
-                        "Enhanced memory processing:",
-                        "Memory classification:",
-                        "Search for relevant memories:",
-                        "Analyze conversation for:",
-                        "Extract entities from:",
-                        "Categorize the following conversation:",
-                    ]
+            openai_metadata = json_data.get("metadata", [])
 
-                    for pattern in internal_patterns:
-                        if pattern in content:
-                            return True
+            # Check for specific internal agent metadata flags
+            if isinstance(openai_metadata, list):
+                internal_metadata = [
+                    "INTERNAL_MEMORY_PROCESSING",  # used in memory agent and retrieval agent
+                    "AGENT_PROCESSING_MODE",
+                    "MEMORY_AGENT_TASK",
+                ]
+                for internal in internal_metadata:
+                    if internal in openai_metadata:
+                        return True
 
             return False
 
@@ -281,9 +274,29 @@ class OpenAIInterceptor:
                     json_data = getattr(options, "json_data", None) or {}
 
                     if "messages" in json_data:
+                        # Check if this is an internal agent processing call
+                        is_internal = cls._is_internal_agent_call(json_data)
+
+                        # Debug logging to help diagnose recording issues
+                        user_messages = [
+                            msg
+                            for msg in json_data.get("messages", [])
+                            if msg.get("role") == "user"
+                        ]
+                        if user_messages and not is_internal:
+                            user_content = user_messages[-1].get("content", "")[:50]
+                            logger.debug(
+                                f"Recording conversation: '{user_content}...' (internal_check={is_internal})"
+                            )
+                        elif is_internal:
+                            logger.debug(
+                                "Skipping internal agent call (detected pattern match)"
+                            )
+
                         # Skip internal agent processing calls
-                        if cls._is_internal_agent_call(json_data):
+                        if is_internal:
                             continue
+
                         # Chat completions
                         memori_instance._record_openai_conversation(json_data, response)
                     elif "prompt" in json_data:

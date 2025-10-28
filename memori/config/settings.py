@@ -4,7 +4,7 @@ Pydantic-based configuration settings for Memoriai
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field, validator
 
@@ -25,6 +25,7 @@ class DatabaseType(str, Enum):
     SQLITE = "sqlite"
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
+    MONGODB = "mongodb"
 
 
 class RetentionPolicy(str, Enum):
@@ -63,7 +64,13 @@ class DatabaseSettings(BaseModel):
             raise ValueError("Connection string cannot be empty")
 
         # Basic validation for supported protocols
-        valid_prefixes = ["sqlite://", "sqlite:///", "postgresql://", "mysql://"]
+        valid_prefixes = [
+            "sqlite://",
+            "sqlite:///",
+            "postgresql://",
+            "mysql://",
+            "mongodb://",
+        ]
         if not any(v.startswith(prefix) for prefix in valid_prefixes):
             raise ValueError(f"Unsupported database type in connection string: {v}")
 
@@ -73,7 +80,7 @@ class DatabaseSettings(BaseModel):
 class AgentSettings(BaseModel):
     """AI agent configuration settings"""
 
-    openai_api_key: Optional[str] = Field(
+    openai_api_key: str | None = Field(
         default=None, description="OpenAI API key for memory processing"
     )
     default_model: str = Field(
@@ -208,7 +215,7 @@ class MemoriSettings(BaseModel):
     integrations: IntegrationSettings = Field(default_factory=IntegrationSettings)
 
     # Custom settings
-    custom_settings: Dict[str, Any] = Field(
+    custom_settings: dict[str, Any] = Field(
         default_factory=dict, description="Custom user-defined settings"
     )
 
@@ -225,7 +232,7 @@ class MemoriSettings(BaseModel):
         return cls()
 
     @classmethod
-    def from_file(cls, config_path: Union[str, Path]) -> "MemoriSettings":
+    def from_file(cls, config_path: str | Path) -> "MemoriSettings":
         """Load settings from JSON/YAML file"""
         import json
         from pathlib import Path
@@ -251,7 +258,7 @@ class MemoriSettings(BaseModel):
 
         return cls(**data)
 
-    def to_file(self, config_path: Union[str, Path], format: str = "json") -> None:
+    def to_file(self, config_path: str | Path, format: str = "json") -> None:
         """Save settings to file"""
         import json
         from pathlib import Path

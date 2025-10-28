@@ -168,7 +168,7 @@ class ProfessionalCoachingTools:
             priority: Goal priority (high, medium, low)
         """
         try:
-            goal_data = {
+            {
                 "goal": goal,
                 "target_date": target_date,
                 "priority": priority,
@@ -177,9 +177,6 @@ class ProfessionalCoachingTools:
             }
 
             # Store in memory for future reference
-            memory_content = (
-                f"Career Goal Set: {goal} (Target: {target_date}, Priority: {priority})"
-            )
 
             return f"Career goal set successfully: '{goal}' with target date {target_date} (Priority: {priority})"
 
@@ -200,7 +197,7 @@ class ProfessionalCoachingTools:
             if proficiency.lower() not in valid_levels:
                 return f" Invalid proficiency level. Use: {', '.join(valid_levels)}"
 
-            assessment_data = {
+            {
                 "skill": skill,
                 "proficiency": proficiency.lower(),
                 "assessment_date": datetime.now().isoformat(),
@@ -232,7 +229,7 @@ class ProfessionalCoachingTools:
             if status.lower() not in valid_statuses:
                 return f" Invalid status. Use: {', '.join(valid_statuses)}"
 
-            progress_data = {
+            {
                 "activity": activity,
                 "status": status.lower(),
                 "updated_date": datetime.now().isoformat(),

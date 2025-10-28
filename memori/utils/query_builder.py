@@ -4,7 +4,7 @@ Provides consistent parameter handling across SQLite, PostgreSQL, and MySQL
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from loguru import logger
 
@@ -43,14 +43,14 @@ class QueryBuilder:
 
     def build_search_query(
         self,
-        tables: List[str],
-        search_columns: List[str],
+        tables: list[str],
+        search_columns: list[str],
         query_text: str,
         namespace: str,
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
         use_fts: bool = False,
-    ) -> Tuple[str, List[Any]]:
+    ) -> tuple[str, list[Any]]:
         """Build a database-specific search query with proper parameter binding"""
 
         try:
@@ -148,8 +148,8 @@ class QueryBuilder:
         return query, params
 
     def build_insert_query(
-        self, table: str, data: Dict[str, Any], on_conflict: str = "REPLACE"
-    ) -> Tuple[str, List[Any]]:
+        self, table: str, data: dict[str, Any], on_conflict: str = "REPLACE"
+    ) -> tuple[str, list[Any]]:
         """Build database-specific insert query with proper parameter binding"""
 
         try:
@@ -210,8 +210,8 @@ class QueryBuilder:
         return query, values
 
     def build_update_query(
-        self, table: str, data: Dict[str, Any], where_conditions: Dict[str, Any]
-    ) -> Tuple[str, List[Any]]:
+        self, table: str, data: dict[str, Any], where_conditions: dict[str, Any]
+    ) -> tuple[str, list[Any]]:
         """Build database-specific update query"""
 
         try:
@@ -248,8 +248,8 @@ class QueryBuilder:
         return query, params
 
     def build_delete_query(
-        self, table: str, where_conditions: Dict[str, Any]
-    ) -> Tuple[str, List[Any]]:
+        self, table: str, where_conditions: dict[str, Any]
+    ) -> tuple[str, list[Any]]:
         """Build database-specific delete query"""
 
         try:
@@ -276,9 +276,9 @@ class QueryBuilder:
         self,
         query_text: str,
         namespace: str,
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> Tuple[str, List[Any]]:
+    ) -> tuple[str, list[Any]]:
         """Build database-specific full-text search query"""
 
         try:
@@ -420,7 +420,7 @@ class QueryBuilder:
         params.append(limit)
         return query, params
 
-    def _get_primary_key_column(self, columns: List[str]) -> Optional[str]:
+    def _get_primary_key_column(self, columns: list[str]) -> str | None:
         """Detect likely primary key column from column names"""
         pk_candidates = [
             "id",
@@ -454,10 +454,10 @@ class DatabaseQueryExecutor:
         self,
         query_text: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
         use_fts: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute search with proper error handling"""
         try:
             if use_fts:
@@ -493,8 +493,8 @@ class DatabaseQueryExecutor:
             return []
 
     def execute_safe_insert(
-        self, table: str, data: Dict[str, Any], on_conflict: str = "REPLACE"
-    ) -> Optional[str]:
+        self, table: str, data: dict[str, Any], on_conflict: str = "REPLACE"
+    ) -> str | None:
         """Execute insert with proper error handling"""
         try:
             sql_query, params = self.query_builder.build_insert_query(
@@ -506,7 +506,7 @@ class DatabaseQueryExecutor:
             raise DatabaseError(f"Failed to insert into {table}: {e}")
 
     def execute_safe_update(
-        self, table: str, data: Dict[str, Any], where_conditions: Dict[str, Any]
+        self, table: str, data: dict[str, Any], where_conditions: dict[str, Any]
     ) -> int:
         """Execute update with proper error handling"""
         try:
@@ -518,7 +518,7 @@ class DatabaseQueryExecutor:
             logger.error(f"Update execution failed: {e}")
             raise DatabaseError(f"Failed to update {table}: {e}")
 
-    def execute_safe_delete(self, table: str, where_conditions: Dict[str, Any]) -> int:
+    def execute_safe_delete(self, table: str, where_conditions: dict[str, Any]) -> int:
         """Execute delete with proper error handling"""
         try:
             sql_query, params = self.query_builder.build_delete_query(

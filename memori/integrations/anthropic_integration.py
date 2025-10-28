@@ -14,8 +14,6 @@ Usage:
     response = client.messages.create(...)
 """
 
-from typing import Optional
-
 from loguru import logger
 
 
@@ -25,7 +23,7 @@ class MemoriAnthropic:
     without monkey-patching. Drop-in replacement for Anthropic client.
     """
 
-    def __init__(self, memori_instance, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, memori_instance, api_key: str | None = None, **kwargs):
         """
         Initialize MemoriAnthropic wrapper
 

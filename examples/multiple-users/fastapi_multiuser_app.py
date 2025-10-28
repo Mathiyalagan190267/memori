@@ -14,7 +14,6 @@ Then visit:
 """
 
 from datetime import datetime
-from typing import Dict, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -39,8 +38,8 @@ app = FastAPI(
 WEB_DATABASE_PATH = "sqlite:///fastapi_multiuser_memory.db"
 
 # Global storage for user memory instances
-user_memories: Dict[str, Memori] = {}
-user_sessions: Dict[str, dict] = {}
+user_memories: dict[str, Memori] = {}
+user_sessions: dict[str, dict] = {}
 
 
 # Pydantic models for request/response
@@ -74,7 +73,7 @@ class HealthResponse(BaseModel):
 
 
 class UsersResponse(BaseModel):
-    users: List[str]
+    users: list[str]
     total_users: int
 
 
@@ -104,7 +103,7 @@ def get_or_create_user_memory(user_id: str) -> Memori:
         session_message = {
             "role": "system",
             "content": f"""New user session started for {user_id} at {datetime.now().isoformat()}.
-            
+
 This is a FastAPI-based chat session. The user will interact through API endpoints.
 User namespace: fastapi_user_{user_id}
 Database: {WEB_DATABASE_PATH}
@@ -137,7 +136,7 @@ async def root():
     </head>
     <body>
         <h1 class="header">🧠 Multi-User Memori FastAPI</h1>
-        
+
         <div class="section">
             <h2>🚀 Interactive API Documentation</h2>
             <p>Use the interactive Swagger UI to test the API:</p>
@@ -148,7 +147,7 @@ async def root():
                 📚 <a href="/redoc" target="_blank"><strong>ReDoc</strong></a> - Alternative API documentation
             </div>
         </div>
-        
+
         <div class="section">
             <h2>🔗 Available Endpoints</h2>
             <div class="endpoint"><strong>POST /chat</strong> - Send a chat message for a specific user</div>
@@ -156,7 +155,7 @@ async def root():
             <div class="endpoint"><strong>GET /user/{user_id}/info</strong> - Get information about a specific user</div>
             <div class="endpoint"><strong>GET /health</strong> - Health check endpoint</div>
         </div>
-        
+
         <div class="section">
             <h2>💡 How to Test</h2>
             <ol>
@@ -167,7 +166,7 @@ async def root():
                 <li>Use <strong>GET /user/{user_id}/info</strong> to see user details</li>
             </ol>
         </div>
-        
+
         <div class="section">
             <h2>🏗️ Architecture</h2>
             <p><strong>Database:</strong> fastapi_multiuser_memory.db (shared)</p>

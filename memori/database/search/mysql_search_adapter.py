@@ -3,7 +3,7 @@ MySQL FULLTEXT search adapter for Memori
 Implements MySQL-specific search functionality
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -49,9 +49,9 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MySQL FULLTEXT search or fallback to LIKE search"""
         if self.fulltext_available and query and query.strip():
             try:
@@ -70,9 +70,9 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str,
-        category_filter: Optional[List[str]],
+        category_filter: list[str] | None,
         limit: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute MySQL FULLTEXT search"""
         results = []
         translated_query = self.translate_search_query(query)
@@ -160,7 +160,7 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         except:
             return 0.0
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create MySQL FULLTEXT indexes"""
         commands = [
             # Create FULLTEXT index on short_term_memory
@@ -206,9 +206,9 @@ class MySQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute fallback LIKE-based search with MySQL syntax"""
         results = []
 

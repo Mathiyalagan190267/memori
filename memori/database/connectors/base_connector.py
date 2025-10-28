@@ -5,7 +5,7 @@ Provides abstraction layer for different database backends
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class DatabaseType(str, Enum):
@@ -14,6 +14,7 @@ class DatabaseType(str, Enum):
     SQLITE = "sqlite"
     MYSQL = "mysql"
     POSTGRESQL = "postgresql"
+    MONGODB = "mongodb"
 
 
 class SearchStrategy(str, Enum):
@@ -28,7 +29,7 @@ class SearchStrategy(str, Enum):
 class BaseDatabaseConnector(ABC):
     """Abstract base class for database connectors"""
 
-    def __init__(self, connection_config: Dict[str, Any]):
+    def __init__(self, connection_config: dict[str, Any]):
         self.connection_config = connection_config
         self.database_type = self._detect_database_type()
 
@@ -44,30 +45,28 @@ class BaseDatabaseConnector(ABC):
 
     @abstractmethod
     def execute_query(
-        self, query: str, params: Optional[List[Any]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, params: list[Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a query and return results"""
         pass
 
     @abstractmethod
-    def execute_insert(self, query: str, params: Optional[List[Any]] = None) -> str:
+    def execute_insert(self, query: str, params: list[Any] | None = None) -> str:
         """Execute an insert query and return the inserted row ID"""
         pass
 
     @abstractmethod
-    def execute_update(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_update(self, query: str, params: list[Any] | None = None) -> int:
         """Execute an update query and return number of affected rows"""
         pass
 
     @abstractmethod
-    def execute_delete(self, query: str, params: Optional[List[Any]] = None) -> int:
+    def execute_delete(self, query: str, params: list[Any] | None = None) -> int:
         """Execute a delete query and return number of affected rows"""
         pass
 
     @abstractmethod
-    def execute_transaction(
-        self, queries: List[Tuple[str, Optional[List[Any]]]]
-    ) -> bool:
+    def execute_transaction(self, queries: list[tuple[str, list[Any] | None]]) -> bool:
         """Execute multiple queries in a transaction"""
         pass
 
@@ -77,7 +76,7 @@ class BaseDatabaseConnector(ABC):
         pass
 
     @abstractmethod
-    def initialize_schema(self, schema_sql: Optional[str] = None):
+    def initialize_schema(self, schema_sql: str | None = None):
         """Initialize database schema"""
         pass
 
@@ -88,13 +87,13 @@ class BaseDatabaseConnector(ABC):
 
     @abstractmethod
     def create_full_text_index(
-        self, table: str, columns: List[str], index_name: str
+        self, table: str, columns: list[str], index_name: str
     ) -> str:
         """Create database-specific full-text search index"""
         pass
 
     @abstractmethod
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information and capabilities"""
         pass
 
@@ -111,14 +110,14 @@ class BaseSearchAdapter(ABC):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute full-text search using database-specific methods"""
         pass
 
     @abstractmethod
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create search indexes for optimal performance"""
         pass
 
@@ -131,9 +130,9 @@ class BaseSearchAdapter(ABC):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute fallback LIKE-based search with proper parameterization"""
         try:
             # Input validation and sanitization
@@ -265,7 +264,7 @@ class BaseSchemaGenerator(ABC):
         pass
 
     @abstractmethod
-    def get_data_type_mappings(self) -> Dict[str, str]:
+    def get_data_type_mappings(self) -> dict[str, str]:
         """Get database-specific data type mappings"""
         pass
 

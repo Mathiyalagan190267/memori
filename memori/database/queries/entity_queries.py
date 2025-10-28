@@ -2,15 +2,13 @@
 Entity and relationship database queries
 """
 
-from typing import Dict
-
 from .base_queries import BaseQueries
 
 
 class EntityQueries(BaseQueries):
     """Centralized entity and relationship SQL queries"""
 
-    def get_table_creation_queries(self) -> Dict[str, str]:
+    def get_table_creation_queries(self) -> dict[str, str]:
         """Entity table creation queries"""
         from .base_queries import SchemaQueries
 
@@ -21,7 +19,7 @@ class EntityQueries(BaseQueries):
             ],
         }
 
-    def get_index_creation_queries(self) -> Dict[str, str]:
+    def get_index_creation_queries(self) -> dict[str, str]:
         """Entity index creation queries"""
         from .base_queries import SchemaQueries
 
@@ -31,7 +29,7 @@ class EntityQueries(BaseQueries):
             if any(word in k for word in ["entities", "relationships"])
         }
 
-    def get_trigger_creation_queries(self) -> Dict[str, str]:
+    def get_trigger_creation_queries(self) -> dict[str, str]:
         """Entity trigger creation queries"""
         return {}  # No triggers for entities currently
 

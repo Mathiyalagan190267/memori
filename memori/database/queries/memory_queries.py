@@ -2,15 +2,13 @@
 Memory-related database queries
 """
 
-from typing import Dict
-
 from .base_queries import BaseQueries
 
 
 class MemoryQueries(BaseQueries):
     """Centralized memory-related SQL queries"""
 
-    def get_table_creation_queries(self) -> Dict[str, str]:
+    def get_table_creation_queries(self) -> dict[str, str]:
         """Memory table creation queries"""
         from .base_queries import SchemaQueries
 
@@ -20,7 +18,7 @@ class MemoryQueries(BaseQueries):
             "rules_memory": SchemaQueries.TABLE_CREATION["rules_memory"],
         }
 
-    def get_index_creation_queries(self) -> Dict[str, str]:
+    def get_index_creation_queries(self) -> dict[str, str]:
         """Memory index creation queries"""
         from .base_queries import SchemaQueries
 
@@ -30,7 +28,7 @@ class MemoryQueries(BaseQueries):
             if any(table in k for table in ["short_term", "long_term", "rules"])
         }
 
-    def get_trigger_creation_queries(self) -> Dict[str, str]:
+    def get_trigger_creation_queries(self) -> dict[str, str]:
         """Memory trigger creation queries"""
         from .base_queries import SchemaQueries
 

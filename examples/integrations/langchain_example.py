@@ -14,7 +14,6 @@ Usage:
 """
 
 import os
-from typing import Optional, Type
 
 from dotenv import load_dotenv
 from langchain.agents import AgentExecutor, create_openai_tools_agent
@@ -72,12 +71,12 @@ class MemorySearchTool(BaseTool):
         "Search the agent's memory for past conversations and information. "
         "Use this to recall previous interactions, user preferences, and context."
     )
-    args_schema: Type[BaseModel] = MemorySearchInput
+    args_schema: type[BaseModel] = MemorySearchInput
 
     def _run(
         self,
         query: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Use the tool to search memory."""
         try:

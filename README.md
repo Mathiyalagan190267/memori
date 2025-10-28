@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://memori.gibsonai.com/docs">Learn more</a>
   ·
-  <a href="https://www.gibsonai.com/discord">Join Discord</a>
+  <a href="https://discord.gg/abD4eGym6v">Join Discord</a>
 </p>
 
 <p align="center">
@@ -23,11 +23,17 @@
   <a href="https://pepy.tech/projects/memorisdk">
     <img src="https://static.pepy.tech/badge/memorisdk" alt="Downloads">
   </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  <a href="https://opensource.org/license/apache-2-0">
+    <img src="https://img.shields.io/badge/license-Apache%20License%202.0-blue" alt="License: Apache 2.0">
   </a>
   <a href="https://www.python.org/downloads/">
     <img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python 3.8+">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/GibsonAI/memori/stargazers">
+    <img src="https://img.shields.io/badge/⭐%20Give%20a%20Star-Support%20the%20project-orange?style=for-the-badge" alt="Give a Star">
   </a>
 </p>
 
@@ -44,7 +50,7 @@ With a single line of code `memori.enable()` any LLM gains the ability to rememb
 - **Radical Simplicity**: One line to enable memory for any LLM framework (OpenAI, Anthropic, LiteLLM, LangChain)
 - **True Data Ownership**: Memory stored in standard SQL databases that users fully control
 - **Complete Transparency**: Every memory decision is queryable with SQL and fully explainable
-- *Zero Vendor Lock-in**: Export your entire memory as a SQLite file and move anywhere
+- **Zero Vendor Lock-in**: Export your entire memory as a SQLite file and move anywhere
 - **Cost Efficiency**: 80-90% cheaper than vector database solutions at scale
 - **Compliance Ready**: SQL-based storage enables audit trails, data residency, and regulatory compliance
 
@@ -108,6 +114,8 @@ print("\n💡 Notice: Memori automatically knows about your FastAPI Python proje
 ```
 
 ---
+
+⭐️ **Enjoying Memori?** Give us a star to support open development
 
 > By default, Memori uses in-memory SQLite database. Get **FREE** serverless database instance in [GibsonAI](https://app.gibsonai.com/signup) platform.
 
@@ -229,6 +237,7 @@ memori = Memori(
     database_connect="sqlite:///my_memory.db",
     template="basic", 
     conscious_ingest=True,  # One-shot context injection
+    conscious_memory_limit=100,  # Must be an integer between 1 and 500
     openai_api_key="sk-..."
 )
 
@@ -385,6 +394,7 @@ Memori works seamlessly with popular AI frameworks:
 | [Agno](./examples/integrations/agno_example.py) | Memory-enhanced agent framework integration with persistent conversations | Simple chat agent with memory search |
 | [AWS Strands](./examples/integrations/aws_strands_example.py) | Professional development coach with Strands SDK and persistent memory | Career coaching agent with goal tracking |
 | [Azure AI Foundry](./examples/integrations/azure_ai_foundry_example.py) | Azure AI Foundry agents with persistent memory across conversations | Enterprise AI agents with Azure integration |
+| [AutoGen](./examples/integrations/autogen_example.py) |  Multi-agent group chat memory recording | Agent chats with memory integration |
 | [CamelAI](./examples/integrations/camelai_example.py) | Multi-agent communication framework with automatic memory recording and retrieval | Memory-enhanced chat agents with conversation continuity |
 | [CrewAI](./examples/integrations/crewai_example.py) | Multi-agent system with shared memory across agent interactions | Collaborative agents with memory |
 | [Digital Ocean AI](./examples/integrations/digital_ocean_example.py) | Memory-enhanced customer support using Digital Ocean's AI platform | Customer support assistant with conversation history |
@@ -405,11 +415,15 @@ Explore Memori's capabilities through these interactive demonstrations:
 ## 🤝 Contributing
 
 - See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
-- Community: [Discord](https://www.gibsonai.com/discord)
+- Community: [Discord](https://discord.gg/abD4eGym6v)
+
+## ⭐️ Star us on GitHub to support the project 
+
+[![Star History Chart](https://api.star-history.com/svg?repos=GibsonAI/memori&type=date&legend=top-left)](https://www.star-history.com/#GibsonAI/memori&type=date&legend=top-left)
 
 ## 📄 License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+Apache 2.0 License - see [LICENSE](./LICENSE) for details.
 
 ---
 

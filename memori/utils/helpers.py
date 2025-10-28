@@ -7,9 +7,10 @@ import functools
 import hashlib
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from .exceptions import MemoriError
 
@@ -52,7 +53,7 @@ class StringUtils:
         return hash_obj.hexdigest()
 
     @staticmethod
-    def extract_keywords(text: str, max_keywords: int = 10) -> List[str]:
+    def extract_keywords(text: str, max_keywords: int = 10) -> list[str]:
         """Extract keywords from text (simple implementation)"""
         import re
 
@@ -201,7 +202,7 @@ class JsonUtils:
             return json.dumps(default or {}, indent=indent)
 
     @staticmethod
-    def merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    def merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
         """Deep merge two dictionaries"""
         result = base.copy()
 
@@ -222,16 +223,14 @@ class FileUtils:
     """File handling utilities"""
 
     @staticmethod
-    def ensure_directory(path: Union[str, Path]) -> Path:
+    def ensure_directory(path: str | Path) -> Path:
         """Ensure directory exists, create if not"""
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     @staticmethod
-    def safe_read_text(
-        file_path: Union[str, Path], encoding: str = "utf-8"
-    ) -> Optional[str]:
+    def safe_read_text(file_path: str | Path, encoding: str = "utf-8") -> str | None:
         """Safely read text file"""
         try:
             return Path(file_path).read_text(encoding=encoding)
@@ -240,7 +239,7 @@ class FileUtils:
 
     @staticmethod
     def safe_write_text(
-        file_path: Union[str, Path], content: str, encoding: str = "utf-8"
+        file_path: str | Path, content: str, encoding: str = "utf-8"
     ) -> bool:
         """Safely write text file"""
         try:
@@ -252,7 +251,7 @@ class FileUtils:
             return False
 
     @staticmethod
-    def get_file_size(file_path: Union[str, Path]) -> int:
+    def get_file_size(file_path: str | Path) -> int:
         """Get file size in bytes"""
         try:
             return Path(file_path).stat().st_size
@@ -260,7 +259,7 @@ class FileUtils:
             return 0
 
     @staticmethod
-    def is_file_recent(file_path: Union[str, Path], hours: int = 24) -> bool:
+    def is_file_recent(file_path: str | Path, hours: int = 24) -> bool:
         """Check if file was modified recently"""
         try:
             mtime = datetime.fromtimestamp(Path(file_path).stat().st_mtime)
@@ -386,7 +385,7 @@ class PerformanceUtils:
         return wrapper
 
     @staticmethod
-    def memory_usage() -> Dict[str, float]:
+    def memory_usage() -> dict[str, float]:
         """Get current memory usage"""
         try:
             import psutil
@@ -417,7 +416,7 @@ class AsyncUtils:
         )
 
     @staticmethod
-    async def gather_with_concurrency(limit: int, *tasks) -> List[Any]:
+    async def gather_with_concurrency(limit: int, *tasks) -> list[Any]:
         """Run tasks with concurrency limit"""
         semaphore = asyncio.Semaphore(limit)
 

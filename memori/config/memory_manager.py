@@ -6,7 +6,7 @@ a clean interface for memory management operations.
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -26,25 +26,25 @@ class MemoryManager:
         self,
         database_connect: str = "sqlite:///memori.db",
         template: str = "basic",
-        mem_prompt: Optional[str] = None,
+        mem_prompt: str | None = None,
         conscious_ingest: bool = False,
         auto_ingest: bool = False,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         shared_memory: bool = False,
-        memory_filters: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        memory_filters: list[str] | None = None,
+        user_id: str | None = None,
         verbose: bool = False,
-        provider_config: Optional[Any] = None,
+        provider_config: Any | None = None,
         # Additional parameters for compatibility
-        openai_api_key: Optional[str] = None,
-        api_key: Optional[str] = None,
-        api_type: Optional[str] = None,
-        base_url: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
-        api_version: Optional[str] = None,
-        azure_ad_token: Optional[str] = None,
-        organization: Optional[str] = None,
+        openai_api_key: str | None = None,
+        api_key: str | None = None,
+        api_type: str | None = None,
+        base_url: str | None = None,
+        azure_endpoint: str | None = None,
+        azure_deployment: str | None = None,
+        api_version: str | None = None,
+        azure_ad_token: str | None = None,
+        organization: str | None = None,
         **kwargs,
     ):
         """
@@ -114,7 +114,7 @@ class MemoryManager:
 
         logger.debug("MemoryManager configured with Memori instance")
 
-    def enable(self, interceptors: Optional[List[str]] = None) -> Dict[str, Any]:
+    def enable(self, interceptors: list[str] | None = None) -> dict[str, Any]:
         """
         Enable memory recording using LiteLLM native callbacks.
 
@@ -162,7 +162,7 @@ class MemoryManager:
             logger.error(f"Failed to enable MemoryManager: {e}")
             return {"success": False, "message": str(e)}
 
-    def disable(self) -> Dict[str, Any]:
+    def disable(self) -> dict[str, Any]:
         """
         Disable memory recording using LiteLLM native callbacks.
 
@@ -194,7 +194,7 @@ class MemoryManager:
             logger.error(f"Failed to disable MemoryManager: {e}")
             return {"success": False, "message": str(e)}
 
-    def get_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_status(self) -> dict[str, dict[str, Any]]:
         """
         Get status of memory recording system.
 
@@ -220,7 +220,7 @@ class MemoryManager:
             }
         }
 
-    def get_health(self) -> Dict[str, Any]:
+    def get_health(self) -> dict[str, Any]:
         """
         Get health check of the memory management system.
 
@@ -263,8 +263,8 @@ class MemoryManager:
         self,
         user_input: str,
         ai_output: str,
-        model: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        model: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Record a conversation (placeholder for future implementation).
@@ -279,10 +279,10 @@ class MemoryManager:
         self,
         query: str,
         limit: int = 5,
-        memory_types: Optional[List[str]] = None,
-        categories: Optional[List[str]] = None,
-        min_importance: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+        memory_types: list[str] | None = None,
+        categories: list[str] | None = None,
+        min_importance: float | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search memories (placeholder for future implementation).
 

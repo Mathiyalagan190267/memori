@@ -12,7 +12,6 @@ import threading
 import webbrowser
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 
 class Colors:
@@ -62,7 +61,7 @@ class MkDocsDevHelper:
         print(f"{color}[{timestamp}] {status}: {message}{Colors.END}")
 
     def run_command(
-        self, cmd: List[str], capture_output: bool = False, check: bool = True
+        self, cmd: list[str], capture_output: bool = False, check: bool = True
     ) -> subprocess.CompletedProcess:
         """Run a command with proper error handling"""
         try:

@@ -5,7 +5,7 @@ Professional-grade memory layer with comprehensive error handling, configuration
 management, and modular architecture for production AI systems.
 """
 
-__version__ = "2.0.1"
+__version__ = "2.3.0"
 __author__ = "Harshal More"
 __email__ = "harshalmore2468@gmail.com"
 
@@ -71,8 +71,8 @@ from .utils import (  # Pydantic models; Enhanced exceptions; Validators and hel
 )
 
 # Memory agents (dynamically imported to avoid import errors)
-MemoryAgent: Optional[Any] = None
-MemorySearchEngine: Optional[Any] = None
+MemoryAgent: Any | None = None
+MemorySearchEngine: Any | None = None
 _AGENTS_AVAILABLE = False
 
 try:

@@ -9,7 +9,7 @@ import ssl
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from loguru import logger
@@ -348,24 +348,72 @@ class SQLAlchemyDatabaseManager:
     def _setup_mysql_fulltext(self, conn):
         """Setup MySQL FULLTEXT indexes"""
         try:
-            # Create FULLTEXT indexes
-            conn.execute(
-                text(
-                    "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
-                )
+            # Check if indexes exist before creating them
+            index_check_query = text(
+                """
+                SELECT COUNT(*) as index_count
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                AND index_name IN ('ft_short_term_search', 'ft_long_term_search')
+            """
             )
 
-            logger.info("MySQL FULLTEXT indexes setup completed")
+            result = conn.execute(index_check_query)
+            existing_indexes = result.fetchone()[0]
+
+            if existing_indexes < 2:
+                logger.info(
+                    f"Creating missing MySQL FULLTEXT indexes ({existing_indexes}/2 exist)..."
+                )
+
+                # Check and create short_term_memory index if missing
+                short_term_check = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                        AND table_name = 'short_term_memory'
+                        AND index_name = 'ft_short_term_search'
+                        """
+                    )
+                ).fetchone()[0]
+
+                if short_term_check == 0:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE short_term_memory ADD FULLTEXT INDEX ft_short_term_search (searchable_content, summary)"
+                        )
+                    )
+                    logger.info("Created ft_short_term_search index")
+
+                # Check and create long_term_memory index if missing
+                long_term_check = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                        AND table_name = 'long_term_memory'
+                        AND index_name = 'ft_long_term_search'
+                        """
+                    )
+                ).fetchone()[0]
+
+                if long_term_check == 0:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_search (searchable_content, summary)"
+                        )
+                    )
+                    logger.info("Created ft_long_term_search index")
+
+                logger.info("MySQL FULLTEXT indexes setup completed")
+            else:
+                logger.debug(
+                    "MySQL FULLTEXT indexes already exist (2/2), skipping creation"
+                )
 
         except Exception as e:
-            logger.warning(
-                f"MySQL FULLTEXT setup failed (indexes may already exist): {e}"
-            )
+            logger.warning(f"MySQL FULLTEXT setup failed: {e}")
 
     def _setup_postgresql_fts(self, conn):
         """Setup PostgreSQL full-text search"""
@@ -461,7 +509,7 @@ class SQLAlchemyDatabaseManager:
         session_id: str,
         namespace: str = "default",
         tokens_used: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Store chat history"""
         with self.SessionLocal() as session:
@@ -488,9 +536,9 @@ class SQLAlchemyDatabaseManager:
     def get_chat_history(
         self,
         namespace: str = "default",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get chat history with optional session filtering"""
         with self.SessionLocal() as session:
             try:
@@ -523,6 +571,28 @@ class SQLAlchemyDatabaseManager:
 
             except SQLAlchemyError as e:
                 raise DatabaseError(f"Failed to get chat history: {e}")
+
+    def _check_milestone(self, memory_count: int):
+        """
+        Check and celebrate memory storage milestones to encourage user engagement.
+        Displays celebration messages at key milestones: 10, 50, 100, 500, 1000 memories.
+
+        Args:
+            memory_count: Current count of long-term memories
+        """
+        milestones = [10, 50, 100, 500, 1000]
+
+        if memory_count in milestones:
+            celebration_msg = (
+                f"\n{'=' * 60}\n"
+                f"🎉 Milestone Achieved: {memory_count} memories stored!\n"
+                f"{'=' * 60}\n"
+                f"⭐️ Loving Memori? Give us a star on GitHub!\n"
+                f"👉 https://github.com/GibsonAI/memori\n"
+                f"Your support helps us build better open AI memory tools ❤️\n"
+                f"{'=' * 60}\n"
+            )
+            logger.info(celebration_msg)
 
     def store_long_term_memory_enhanced(
         self, memory: ProcessedLongTermMemory, chat_id: str, namespace: str = "default"
@@ -570,6 +640,17 @@ class SQLAlchemyDatabaseManager:
                 session.commit()
 
                 logger.debug(f"Stored enhanced long-term memory {memory_id}")
+
+                # Get current memory count and check for milestones
+                total_memories = (
+                    session.query(LongTermMemory)
+                    .filter(LongTermMemory.namespace == namespace)
+                    .count()
+                )
+
+                # Celebrate milestone if reached
+                self._check_milestone(total_memories)
+
                 return memory_id
 
             except SQLAlchemyError as e:
@@ -581,9 +662,9 @@ class SQLAlchemyDatabaseManager:
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search memories using the cross-database search service"""
         search_service = None
         try:
@@ -630,7 +711,7 @@ class SQLAlchemyDatabaseManager:
                 except Exception as session_e:
                     logger.warning(f"Error closing search service session: {session_e}")
 
-    def get_memory_stats(self, namespace: str = "default") -> Dict[str, Any]:
+    def get_memory_stats(self, namespace: str = "default") -> dict[str, Any]:
         """Get comprehensive memory statistics"""
         with self.SessionLocal() as session:
             try:
@@ -727,9 +808,7 @@ class SQLAlchemyDatabaseManager:
             except SQLAlchemyError as e:
                 raise DatabaseError(f"Failed to get memory stats: {e}")
 
-    def clear_memory(
-        self, namespace: str = "default", memory_type: Optional[str] = None
-    ):
+    def clear_memory(self, namespace: str = "default", memory_type: str | None = None):
         """Clear memory data"""
         with self.SessionLocal() as session:
             try:
@@ -762,7 +841,7 @@ class SQLAlchemyDatabaseManager:
                 session.rollback()
                 raise DatabaseError(f"Failed to clear memory: {e}")
 
-    def execute_with_translation(self, query: str, parameters: Dict[str, Any] = None):
+    def execute_with_translation(self, query: str, parameters: dict[str, Any] = None):
         """
         Execute a query with automatic parameter translation for cross-database compatibility.
 
@@ -865,7 +944,7 @@ class SQLAlchemyDatabaseManager:
         if hasattr(self, "engine"):
             self.engine.dispose()
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information and capabilities"""
         base_info = {
             "database_type": self.database_type,

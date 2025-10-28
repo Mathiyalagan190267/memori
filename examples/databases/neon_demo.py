@@ -6,7 +6,7 @@ This example demonstrates how to use Memori with Neon, a serverless PostgreSQL d
 Setup:
 1. Create a Neon project at: https://console.neon.tech/
 2. Get your connection string from the Neon dashboard
-3. Install dependencies: pip install openai memori psycopg2-binary
+3. Install dependencies: pip install openai memorisdk psycopg2-binary
 4. Set your OpenAI API key: export OPENAI_API_KEY="your-api-key-here"
 5. Replace the connection string below with your own
 

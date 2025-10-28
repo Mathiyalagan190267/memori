@@ -2,7 +2,7 @@
 PostgreSQL-specific search adapter with tsvector support and proper security
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -26,9 +26,9 @@ class PostgreSQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute PostgreSQL full-text search with tsvector"""
         try:
             # Validate all parameters
@@ -66,7 +66,7 @@ class PostgreSQLSearchAdapter(BaseSearchAdapter):
                 query, namespace, category_filter, limit
             )
 
-    def create_search_indexes(self) -> List[str]:
+    def create_search_indexes(self) -> list[str]:
         """Create PostgreSQL-specific search indexes"""
         indexes = []
 
@@ -170,9 +170,9 @@ class PostgreSQLSearchAdapter(BaseSearchAdapter):
         self,
         query: str,
         namespace: str = "default",
-        category_filter: Optional[List[str]] = None,
+        category_filter: list[str] | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute LIKE-based fallback search for PostgreSQL"""
         try:
             return self.query_executor.execute_search(

@@ -4,7 +4,7 @@ Configuration manager for Memoriai
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -16,7 +16,7 @@ class ConfigManager:
     """Central configuration manager for Memoriai"""
 
     _instance: Optional["ConfigManager"] = None
-    _settings: Optional[MemoriSettings] = None
+    _settings: MemoriSettings | None = None
 
     def __new__(cls) -> "ConfigManager":
         """Singleton pattern for configuration manager"""
@@ -50,7 +50,7 @@ class ConfigManager:
             logger.warning(f"Failed to load configuration from environment: {e}")
             raise ConfigurationError(f"Environment configuration error: {e}")
 
-    def load_from_file(self, config_path: Union[str, Path]) -> None:
+    def load_from_file(self, config_path: str | Path) -> None:
         """Load configuration from file"""
         try:
             config_path = Path(config_path)
@@ -122,8 +122,8 @@ class ConfigManager:
         self._settings = MemoriSettings(**merged_dict)
 
     def _deep_merge_dicts(
-        self, base: Dict[str, Any], override: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> dict[str, Any]:
         """Deep merge two dictionaries"""
         result = base.copy()
 
@@ -139,7 +139,7 @@ class ConfigManager:
 
         return result
 
-    def save_to_file(self, config_path: Union[str, Path], format: str = "json") -> None:
+    def save_to_file(self, config_path: str | Path, format: str = "json") -> None:
         """Save current configuration to file"""
         if self._settings is None:
             raise ConfigurationError("No configuration loaded to save")
@@ -236,7 +236,7 @@ class ConfigManager:
             logger.error(f"Configuration validation failed: {e}")
             return False
 
-    def get_config_info(self) -> Dict[str, Any]:
+    def get_config_info(self) -> dict[str, Any]:
         """Get information about current configuration"""
         return {
             "loaded": self._settings is not None,

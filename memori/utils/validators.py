@@ -4,7 +4,7 @@ Data validation utilities for Memoriai
 
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any
 
 from .exceptions import ValidationError
 
@@ -58,11 +58,11 @@ class DataValidator:
     @classmethod
     def validate_namespace(cls, value: str, field_name: str = "namespace") -> str:
         """Validate namespace format"""
-        if not isinstance(value, str):
-            raise ValidationError(f"{field_name} must be a string")
+        if value is None or (isinstance(value,str) and value.strip() == ""):
+            return "default"
 
-        if not value:
-            raise ValidationError(f"{field_name} cannot be empty")
+        if not isinstance(value,str):
+            raise ValidationError(f"{field_name} must be a string")
 
         if len(value) > 64:
             raise ValidationError(f"{field_name} cannot exceed 64 characters")
@@ -73,14 +73,14 @@ class DataValidator:
                 f"{field_name} can only contain letters, numbers, underscores, and hyphens"
             )
 
-        return value
+        return value.strip()
 
     @classmethod
     def validate_importance_score(
         cls, value: float, field_name: str = "importance score"
     ) -> float:
         """Validate importance score (0.0 to 1.0)"""
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             raise ValidationError(f"{field_name} must be a number")
 
         if not 0.0 <= value <= 1.0:
@@ -103,7 +103,7 @@ class DataValidator:
     @classmethod
     def validate_file_path(
         cls,
-        value: Union[str, Path],
+        value: str | Path,
         field_name: str = "file path",
         must_exist: bool = False,
     ) -> Path:
@@ -123,7 +123,7 @@ class DataValidator:
     @classmethod
     def validate_json_dict(
         cls, value: Any, field_name: str = "JSON data"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Validate that value is a JSON-serializable dictionary"""
         if not isinstance(value, dict):
             raise ValidationError(f"{field_name} must be a dictionary")
@@ -256,7 +256,7 @@ class MemoryValidator:
     """Specialized validator for memory-related data"""
 
     @classmethod
-    def validate_memory_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_memory_data(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Validate complete memory data structure"""
         validated = {}
 
@@ -301,7 +301,7 @@ class MemoryValidator:
         return validated
 
     @classmethod
-    def validate_chat_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_chat_data(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Validate chat data structure"""
         validated = {}
 

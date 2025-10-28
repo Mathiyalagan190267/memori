@@ -4,7 +4,7 @@ Custom exceptions for Memoriai with comprehensive error handling
 
 import traceback
 from datetime import datetime
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 
 class MemoriError(Exception):
@@ -13,9 +13,9 @@ class MemoriError(Exception):
     def __init__(
         self,
         message: str,
-        error_code: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None,
+        error_code: str | None = None,
+        context: dict[str, Any] | None = None,
+        cause: Exception | None = None,
     ):
         super().__init__(message)
         self.message = message
@@ -25,7 +25,7 @@ class MemoriError(Exception):
         self.timestamp = datetime.now()
         self.traceback = traceback.format_exc() if cause else None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for logging/serialization"""
         return {
             "error_type": self.__class__.__name__,
@@ -52,10 +52,10 @@ class DatabaseError(MemoriError):
     def __init__(
         self,
         message: str,
-        query: Optional[str] = None,
-        connection_string: Optional[str] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        query: str | None = None,
+        connection_string: str | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if query:
@@ -88,12 +88,12 @@ class AgentError(MemoriError):
     def __init__(
         self,
         message: str,
-        agent_type: Optional[str] = None,
-        model: Optional[str] = None,
-        api_endpoint: Optional[str] = None,
-        tokens_used: Optional[int] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        agent_type: str | None = None,
+        model: str | None = None,
+        api_endpoint: str | None = None,
+        tokens_used: int | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if agent_type:
@@ -119,10 +119,10 @@ class ConfigurationError(MemoriError):
     def __init__(
         self,
         message: str,
-        setting_path: Optional[str] = None,
-        config_file: Optional[str] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        setting_path: str | None = None,
+        config_file: str | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if setting_path:
@@ -144,11 +144,11 @@ class ValidationError(MemoriError):
     def __init__(
         self,
         message: str,
-        field_name: Optional[str] = None,
-        field_value: Optional[Any] = None,
-        expected_type: Optional[str] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        field_name: str | None = None,
+        field_value: Any | None = None,
+        expected_type: str | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if field_name:
@@ -172,10 +172,10 @@ class IntegrationError(MemoriError):
     def __init__(
         self,
         message: str,
-        provider: Optional[str] = None,
-        integration_type: Optional[str] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        provider: str | None = None,
+        integration_type: str | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if provider:
@@ -197,10 +197,10 @@ class AuthenticationError(MemoriError):
     def __init__(
         self,
         message: str,
-        auth_type: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        auth_type: str | None = None,
+        endpoint: str | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if auth_type:
@@ -222,11 +222,11 @@ class RateLimitError(MemoriError):
     def __init__(
         self,
         message: str,
-        provider: Optional[str] = None,
-        limit_type: Optional[str] = None,
-        retry_after: Optional[int] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        provider: str | None = None,
+        limit_type: str | None = None,
+        retry_after: int | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if provider:
@@ -250,11 +250,11 @@ class MemoryNotFoundError(MemoriError):
     def __init__(
         self,
         message: str,
-        memory_id: Optional[str] = None,
-        namespace: Optional[str] = None,
-        search_criteria: Optional[Dict[str, Any]] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        memory_id: str | None = None,
+        namespace: str | None = None,
+        search_criteria: dict[str, Any] | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if memory_id:
@@ -278,10 +278,10 @@ class ProcessingError(MemoriError):
     def __init__(
         self,
         message: str,
-        processing_stage: Optional[str] = None,
-        input_data: Optional[Dict[str, Any]] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        processing_stage: str | None = None,
+        input_data: dict[str, Any] | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if processing_stage:
@@ -308,10 +308,10 @@ class TimeoutError(MemoriError):
     def __init__(
         self,
         message: str,
-        operation: Optional[str] = None,
-        timeout_seconds: Optional[float] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        operation: str | None = None,
+        timeout_seconds: float | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if operation:
@@ -333,11 +333,11 @@ class ResourceExhaustedError(MemoriError):
     def __init__(
         self,
         message: str,
-        resource_type: Optional[str] = None,
-        current_usage: Optional[Union[int, float]] = None,
-        limit: Optional[Union[int, float]] = None,
-        error_code: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        resource_type: str | None = None,
+        current_usage: int | float | None = None,
+        limit: int | float | None = None,
+        error_code: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if resource_type:
@@ -361,7 +361,7 @@ class ExceptionHandler:
 
     @staticmethod
     def handle_database_exception(
-        e: Exception, query: Optional[str] = None
+        e: Exception, query: str | None = None
     ) -> DatabaseError:
         """Convert generic exception to DatabaseError with context"""
         if isinstance(e, DatabaseError):
@@ -375,7 +375,7 @@ class ExceptionHandler:
 
     @staticmethod
     def handle_agent_exception(
-        e: Exception, agent_type: Optional[str] = None
+        e: Exception, agent_type: str | None = None
     ) -> AgentError:
         """Convert generic exception to AgentError with context"""
         if isinstance(e, AgentError):
@@ -389,7 +389,7 @@ class ExceptionHandler:
 
     @staticmethod
     def handle_validation_exception(
-        e: Exception, field_name: Optional[str] = None
+        e: Exception, field_name: str | None = None
     ) -> ValidationError:
         """Convert generic exception to ValidationError with context"""
         if isinstance(e, ValidationError):

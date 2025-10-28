@@ -3,8 +3,6 @@ MySQL schema generator for Memori v2.0
 Converts SQLite schema to MySQL-compatible schema with FULLTEXT search
 """
 
-from typing import Dict, List
-
 from ..connectors.base_connector import BaseSchemaGenerator, DatabaseType
 
 
@@ -14,7 +12,7 @@ class MySQLSchemaGenerator(BaseSchemaGenerator):
     def __init__(self):
         super().__init__(DatabaseType.MYSQL)
 
-    def get_data_type_mappings(self) -> Dict[str, str]:
+    def get_data_type_mappings(self) -> dict[str, str]:
         """Get MySQL-specific data type mappings from SQLite"""
         return {
             "TEXT": "TEXT",
@@ -204,7 +202,7 @@ ALTER TABLE long_term_memory ADD FULLTEXT INDEX ft_long_term_topic (topic);
         ]
         return "\n".join(schema_parts)
 
-    def get_migration_queries(self) -> List[str]:
+    def get_migration_queries(self) -> list[str]:
         """Get queries to migrate from SQLite to MySQL"""
         return [
             # Note: These would be used for data migration from SQLite to MySQL
