@@ -26,7 +26,7 @@ from .core.memory import Memori
 
 # Database system
 from .database.connectors import MySQLConnector, PostgreSQLConnector, SQLiteConnector
-from .database.queries import BaseQueries, ChatQueries, EntityQueries, MemoryQueries
+from .database.queries import BaseQueries, ChatQueries, MemoryQueries  # EntityQueries removed (graph search simplified)
 
 # Wrapper integrations
 from .integrations import MemoriAnthropic, MemoriOpenAI
@@ -39,6 +39,7 @@ from .utils import (  # Pydantic models; Enhanced exceptions; Validators and hel
     AgentError,
     AsyncUtils,
     AuthenticationError,
+    ConcurrentUpdateError,
     ConfigurationError,
     ConversationContext,
     DatabaseError,
@@ -64,6 +65,7 @@ from .utils import (  # Pydantic models; Enhanced exceptions; Validators and hel
     ResourceExhaustedError,
     RetentionType,
     RetryUtils,
+    SecurityError,
     StringUtils,
     TimeoutError,
     ValidationError,
@@ -102,7 +104,7 @@ _all_components = [
     "BaseQueries",
     "MemoryQueries",
     "ChatQueries",
-    "EntityQueries",
+    # "EntityQueries",  # Removed: graph search simplified
     # Tools
     "MemoryTool",
     "create_memory_tool",
@@ -132,6 +134,8 @@ _all_components = [
     "ProcessingError",
     "TimeoutError",
     "ResourceExhaustedError",
+    "SecurityError",
+    "ConcurrentUpdateError",
     "ExceptionHandler",
     # Validators
     "DataValidator",
