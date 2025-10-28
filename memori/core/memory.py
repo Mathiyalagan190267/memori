@@ -114,7 +114,9 @@ class Memori:
         self.database_suffix = database_suffix
 
         # Validate conscious_memory_limit parameter
-        if not isinstance(conscious_memory_limit, int) or isinstance(conscious_memory_limit, bool):
+        if not isinstance(conscious_memory_limit, int) or isinstance(
+            conscious_memory_limit, bool
+        ):
             raise TypeError("conscious_memory_limit must be an integer (not bool)")
 
         if not (1 <= conscious_memory_limit <= 2000):
@@ -2639,7 +2641,7 @@ class Memori:
         Get auto-ingest context as system prompt for direct injection.
         Returns relevant memories based on user input as formatted system prompt.
         Use this for auto_ingest mode.
-        
+
         Note: Context retrieval is handled by _get_auto_ingest_context().
         This function only formats pre-retrieved context.
         """
