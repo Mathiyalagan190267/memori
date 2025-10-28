@@ -40,8 +40,8 @@ class LoggingManager:
             else:
                 logger.add(
                     sys.stderr,
-                    level="WARNING",  
-                    format="<level>{level}</level>: {message}",  
+                    level="WARNING",
+                    format="<level>{level}</level>: {message}",
                     colorize=False,
                     backtrace=False,
                     diagnose=False,
@@ -124,7 +124,6 @@ class LoggingManager:
         Intercept all logs from the standard `logging` module and redirect them to Loguru.
         This ensures all log output is controlled and formatted by Loguru.
         """
-        import logging
 
         class InterceptStandardLoggingHandler(logging.Handler):
             def emit(self, record: logging.LogRecord) -> None:
@@ -134,7 +133,9 @@ class LoggingManager:
                     level = record.levelno
 
                 frame, depth = logging.currentframe(), 2
-                while frame is not None and frame.f_code.co_filename == logging.__file__:
+                while (
+                    frame is not None and frame.f_code.co_filename == logging.__file__
+                ):
                     frame = frame.f_back
                     depth += 1
 
@@ -144,7 +145,9 @@ class LoggingManager:
                     level, formatted_message
                 )
 
-        logging.basicConfig(handlers=[InterceptStandardLoggingHandler()], level=0, force=True)
+        logging.basicConfig(
+            handlers=[InterceptStandardLoggingHandler()], level=0, force=True
+        )
 
 
 def get_logger(name: str = "memori") -> "logger":

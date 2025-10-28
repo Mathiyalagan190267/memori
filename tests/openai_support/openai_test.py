@@ -301,7 +301,7 @@ def main():
 def test_auto_ingest_intelligent_retrieval():
     """
     Test _get_auto_ingest_context() for intelligent context retrieval.
-    
+
     This function is the actual implementation that handles:
     - Database search with user_input
     - Fallback to recent memories
@@ -309,7 +309,7 @@ def test_auto_ingest_intelligent_retrieval():
     - Search engine integration
     - Error handling
     """
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     print("\n" + "=" * 60)
     print("Testing _get_auto_ingest_context() Intelligent Retrieval")
@@ -344,16 +344,21 @@ def test_auto_ingest_intelligent_retrieval():
         result = memori._get_auto_ingest_context("What are my preferences?")
 
         # Verify results returned with metadata
-        if len(result) == 3 and result[0].get("retrieval_method") == "direct_database_search":
+        if (
+            len(result) == 3
+            and result[0].get("retrieval_method") == "direct_database_search"
+        ):
             print("[OK] Test 1 passed: Direct search returns 3 results with metadata")
             test_passed += 1
         else:
-            print(f"[FAIL] Test 1 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}")
+            print(
+                f"[FAIL] Test 1 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}"
+            )
 
     # Test 2: Empty input returns empty list
     print("\n[Test 2/8] Empty input returns empty list...")
     result = memori._get_auto_ingest_context("")
-    
+
     if result == []:
         print("[OK] Test 2 passed: Empty input returns []")
         test_passed += 1
@@ -374,16 +379,21 @@ def test_auto_ingest_intelligent_retrieval():
         result = memori._get_auto_ingest_context("query with no results")
 
         # Check fallback was used and metadata added
-        if len(result) == 2 and result[0].get("retrieval_method") == "recent_memories_fallback":
+        if (
+            len(result) == 2
+            and result[0].get("retrieval_method") == "recent_memories_fallback"
+        ):
             print("[OK] Test 3 passed: Fallback to recent memories works")
             test_passed += 1
         else:
-            print(f"[FAIL] Test 3 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}")
+            print(
+                f"[FAIL] Test 3 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}"
+            )
 
     # Test 4: Recursion guard prevents infinite loops
     print("\n[Test 4/8] Recursion guard prevents infinite loops...")
     memori._in_context_retrieval = True
-    
+
     mock_results = [{"searchable_content": "Safe result", "category_primary": "fact"}]
     with patch.object(
         memori.db_manager, "search_memories", return_value=mock_results
@@ -395,8 +405,8 @@ def test_auto_ingest_intelligent_retrieval():
             print("[OK] Test 4 passed: Recursion guard triggers direct search")
             test_passed += 1
         else:
-            print(f"[FAIL] Test 4 failed: Expected direct search results")
-    
+            print("[FAIL] Test 4 failed: Expected direct search results")
+
     # Reset recursion guard
     memori._in_context_retrieval = False
 
@@ -410,7 +420,9 @@ def test_auto_ingest_intelligent_retrieval():
     memori.search_engine = mock_search_engine
 
     with patch.object(
-        memori.db_manager, "search_memories", side_effect=[[], []]  # Both direct and fallback empty
+        memori.db_manager,
+        "search_memories",
+        side_effect=[[], []],  # Both direct and fallback empty
     ):
         result = memori._get_auto_ingest_context("advanced query")
 
@@ -419,25 +431,30 @@ def test_auto_ingest_intelligent_retrieval():
             print("[OK] Test 5 passed: Search engine fallback works")
             test_passed += 1
         else:
-            print(f"[FAIL] Test 5 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}")
-    
+            print(
+                f"[FAIL] Test 5 failed: got {len(result)} results, metadata: {result[0].get('retrieval_method') if result else 'N/A'}"
+            )
+
     # Reset search engine
     memori.search_engine = None
 
     # Test 6: Error handling - graceful degradation
     print("\n[Test 6/8] Error handling with graceful degradation...")
-    
+
     # First call fails, fallback succeeds
     mock_fallback = [{"searchable_content": "Fallback", "category_primary": "fact"}]
     with patch.object(
         memori.db_manager,
         "search_memories",
-        side_effect=[Exception("DB error"), mock_fallback]
+        side_effect=[Exception("DB error"), mock_fallback],
     ):
         result = memori._get_auto_ingest_context("test error handling")
 
         # Should fallback to recent memories
-        if len(result) == 1 and result[0].get("retrieval_method") == "recent_memories_fallback":
+        if (
+            len(result) == 1
+            and result[0].get("retrieval_method") == "recent_memories_fallback"
+        ):
             print("[OK] Test 6 passed: Error handled, fallback used")
             test_passed += 1
         else:
@@ -448,7 +465,7 @@ def test_auto_ingest_intelligent_retrieval():
     with patch.object(
         memori.db_manager,
         "search_memories",
-        return_value=[{"searchable_content": "Test", "category_primary": "fact"}]
+        return_value=[{"searchable_content": "Test", "category_primary": "fact"}],
     ) as mock_search:
         user_query = "find my API keys"
         result = memori._get_auto_ingest_context(user_query)
@@ -468,7 +485,9 @@ def test_auto_ingest_intelligent_retrieval():
                 print("[OK] Test 7 passed: search_memories called with correct params")
                 test_passed += 1
             else:
-                print(f"[FAIL] Test 7 failed: query={query_match}, ns={namespace_match}, limit={limit_match}")
+                print(
+                    f"[FAIL] Test 7 failed: query={query_match}, ns={namespace_match}, limit={limit_match}"
+                )
         else:
             print("[FAIL] Test 7 failed: search_memories not called")
 
@@ -479,22 +498,19 @@ def test_auto_ingest_intelligent_retrieval():
         {"searchable_content": "Item 2", "category_primary": "preference"},
     ]
 
-    with patch.object(
-        memori.db_manager, "search_memories", return_value=mock_results
-    ):
+    with patch.object(memori.db_manager, "search_memories", return_value=mock_results):
         result = memori._get_auto_ingest_context("metadata test")
 
         # Check all results have metadata
         all_have_metadata = all(
-            r.get("retrieval_method") and r.get("retrieval_query") 
-            for r in result
+            r.get("retrieval_method") and r.get("retrieval_query") for r in result
         )
 
         if all_have_metadata and result[0]["retrieval_query"] == "metadata test":
             print("[OK] Test 8 passed: All results have retrieval metadata")
             test_passed += 1
         else:
-            print(f"[FAIL] Test 8 failed: metadata missing or incorrect")
+            print("[FAIL] Test 8 failed: metadata missing or incorrect")
 
     # Summary
     print("\n" + "=" * 60)

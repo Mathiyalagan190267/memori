@@ -58,10 +58,10 @@ class DataValidator:
     @classmethod
     def validate_namespace(cls, value: str, field_name: str = "namespace") -> str:
         """Validate namespace format"""
-        if value is None or (isinstance(value,str) and value.strip() == ""):
+        if value is None or (isinstance(value, str) and value.strip() == ""):
             return "default"
 
-        if not isinstance(value,str):
+        if not isinstance(value, str):
             raise ValidationError(f"{field_name} must be a string")
 
         if len(value) > 64:
