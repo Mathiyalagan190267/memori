@@ -1,4 +1,4 @@
-[![GibsonAI](https://github.com/user-attachments/assets/878e341b-5a93-4489-a398-abeca91b6b11)](https://gibsonai.com/)
+[![Memori Labs](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/banner.png)](https://memorilabs.ai/)
 
 # memori
 
