@@ -173,8 +173,8 @@ class MigrationHelper:
                         )
                         for row in result:
                             print(f"    - namespace '{row[0]}': {row[1]} records")
-                    except:
-                        pass  # Namespace column doesn't exist
+                    except Exception:
+                        pass  # Namespace column doesn't exist or query failed
 
         except Exception as e:
             print(f"✗ Failed to get statistics: {e}")

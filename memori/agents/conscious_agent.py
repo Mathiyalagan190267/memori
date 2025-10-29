@@ -393,8 +393,6 @@ class ConsciouscAgent:
                 )
 
                 # Detect database type for proper JSON handling
-                import json
-
                 db_type = str(connection.engine.dialect.name).lower()
 
                 # Serialize processed_data to JSON string

@@ -247,8 +247,6 @@ class JWTAuthProvider(AuthProvider):
     ) -> bool:
         """Validate user has access to session"""
         try:
-            payload = self._decode_token(auth_token)
-
             # First validate user
             if not self.validate_user(user_id, auth_token):
                 return False

@@ -2545,17 +2545,13 @@ class Memori:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 # No event loop running, create a new thread for async tasks
-                import contextvars
                 import threading
 
                 # CRITICAL FIX: Capture the current context before creating the thread
                 # This ensures the Memori instance context propagates to background tasks
                 from ..integrations.openai_integration import set_active_memori_context
 
-                # Capture the context in the current thread
-                ctx = contextvars.copy_context()
-
-                # Ensure this instance is set as active before copying context
+                # Ensure this instance is set as active before setting context
                 set_active_memori_context(self)
                 logger.debug(
                     f"Captured context for background thread: user_id={self.user_id}"

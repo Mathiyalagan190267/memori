@@ -72,7 +72,11 @@ class DatabaseConnectionUtils:
             # Create default database URL for system operations
             # DigitalOcean managed PostgreSQL uses 'defaultdb' instead of 'postgres'
             default_db = cls.DEFAULT_DATABASES.get(engine)
-            if engine == "postgresql" and "digitalocean.com" in host.lower():
+            host_lower = host.lower()
+            if engine == "postgresql" and (
+                host_lower.endswith(".digitalocean.com")
+                or host_lower == "digitalocean.com"
+            ):
                 default_db = "defaultdb"
                 logger.debug(
                     "DigitalOcean PostgreSQL detected - using 'defaultdb' as system database"

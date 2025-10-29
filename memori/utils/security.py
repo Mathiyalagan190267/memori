@@ -56,6 +56,7 @@ def require_user_id(func: Callable) -> Callable:
                 if user_id_index < len(args):
                     user_id = args[user_id_index]
             except (ValueError, IndexError):
+                # user_id parameter not found in function signature
                 pass
 
         # Validate user_id is provided
@@ -127,6 +128,7 @@ def require_valid_session_id(func: Callable) -> Callable:
                 if session_id_index < len(args):
                     session_id = args[session_id_index]
             except (ValueError, IndexError):
+                # session_id parameter not found in function signature
                 pass
 
         # Validate session_id

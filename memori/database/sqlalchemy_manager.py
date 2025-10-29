@@ -544,7 +544,8 @@ class SQLAlchemyDatabaseManager:
             if session:
                 try:
                     session.close()
-                except:
+                except Exception:
+                    # Ignore session close errors during cleanup
                     pass
             return None
 
