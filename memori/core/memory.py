@@ -48,7 +48,9 @@ class Memori:
         # Multi-tenant isolation parameters
         user_id: str | None = None,  # Primary tenant isolation field
         assistant_id: str | None = None,  # Optional bot/assistant isolation
-        session_id: str | None = "default",  # Conversation grouping within user (None = all sessions)
+        session_id: (
+            str | None
+        ) = "default",  # Conversation grouping within user (None = all sessions)
         # Deprecated parameter (backward compatibility)
         namespace: str | None = None,  # DEPRECATED: Use user_id instead
         # Other parameters
@@ -119,11 +121,12 @@ class Memori:
         # Handle deprecated namespace parameter (backward compatibility)
         if namespace is not None:
             import warnings
+
             warnings.warn(
                 "The 'namespace' parameter is deprecated and will be removed in v3.0. "
                 "Use 'user_id' instead for multi-tenant isolation.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             # If both namespace and user_id are provided, user_id takes precedence
             if user_id is None:
@@ -132,7 +135,9 @@ class Memori:
         # Multi-tenant isolation fields
         self.user_id = user_id or "default"
         self.assistant_id = assistant_id  # Optional, can be None
-        self._session_id = session_id or "default"  # Private because session_id is a @property
+        self._session_id = (
+            session_id or "default"
+        )  # Private because session_id is a @property
 
         self.shared_memory = shared_memory
         self.memory_filters = memory_filters or {}
@@ -342,7 +347,9 @@ class Memori:
 
         # Don't run conscious agent initialization during __init__ - defer until enable()
         # This prevents OpenAI API calls before context is set in multi-tenant scenarios
-        self._conscious_init_pending = True if (self.conscious_ingest and self.conscious_agent) else False
+        self._conscious_init_pending = (
+            True if (self.conscious_ingest and self.conscious_agent) else False
+        )
 
         logger.info(
             f"Memori v1.0 initialized - template: {template}, user_id: {self.user_id}, "
@@ -676,25 +683,26 @@ class Memori:
 
             from datetime import datetime
 
-            from sqlalchemy import text
-
             # SECURITY FIX: Use ORM methods instead of raw SQL to prevent injection
             # Check for exact match or conscious-prefixed memories
-            from sqlalchemy import or_
+            from sqlalchemy import or_, text
 
             with self.db_manager.SessionLocal() as session:
                 # Safe parameterized query using ORM - no SQL injection possible
-                existing_count = session.query(
-                    self.db_manager.ShortTermMemory
-                ).filter(
-                    self.db_manager.ShortTermMemory.user_id == (self.user_id or "default"),
-                    or_(
-                        self.db_manager.ShortTermMemory.memory_id == memory_id,
-                        self.db_manager.ShortTermMemory.memory_id.like(
-                            f"conscious_{memory_id}_%"
-                        )
+                existing_count = (
+                    session.query(self.db_manager.ShortTermMemory)
+                    .filter(
+                        self.db_manager.ShortTermMemory.user_id
+                        == (self.user_id or "default"),
+                        or_(
+                            self.db_manager.ShortTermMemory.memory_id == memory_id,
+                            self.db_manager.ShortTermMemory.memory_id.like(
+                                f"conscious_{memory_id}_%"
+                            ),
+                        ),
                     )
-                ).count()
+                    .count()
+                )
 
                 if existing_count > 0:
                     logger.debug(
@@ -767,9 +775,9 @@ class Memori:
         # Register for automatic OpenAI interception
         try:
             from ..integrations.openai_integration import (
+                get_enabled_instances,
                 register_memori_instance,
                 set_active_memori_context,
-                get_enabled_instances
             )
 
             register_memori_instance(self)
@@ -809,8 +817,11 @@ class Memori:
             # Ensure context is set for this instance before running initialization
             # This is critical for multi-tenant scenarios
             from ..integrations.openai_integration import set_active_memori_context
+
             set_active_memori_context(self)
-            logger.debug(f"Set context to {self.user_id} before conscious initialization")
+            logger.debug(
+                f"Set context to {self.user_id} before conscious initialization"
+            )
 
             self._check_deferred_initialization()
 
@@ -1884,13 +1895,17 @@ class Memori:
 
             # Ensure this instance is set as active
             set_active_memori_context(self)
-            logger.debug(f"Set context before memory processing: user_id={self.user_id}, chat_id={chat_id[:8]}...")
+            logger.debug(
+                f"Set context before memory processing: user_id={self.user_id}, chat_id={chat_id[:8]}..."
+            )
 
             def run_memory_processing():
                 """Run memory processing with improved event loop management"""
                 # CRITICAL FIX: Set context in the new thread
                 set_active_memori_context(self)
-                logger.debug(f"Context set in memory processing thread: user_id={self.user_id}")
+                logger.debug(
+                    f"Context set in memory processing thread: user_id={self.user_id}"
+                )
 
                 new_loop = None
                 try:
@@ -2120,8 +2135,11 @@ class Memori:
             # CRITICAL FIX: Set context before scheduling async task
             # Context DOES propagate to tasks created with create_task(), but we ensure it's set
             from ..integrations.openai_integration import set_active_memori_context
+
             set_active_memori_context(self)
-            logger.debug(f"Context set before scheduling async memory processing: user_id={self.user_id}")
+            logger.debug(
+                f"Context set before scheduling async memory processing: user_id={self.user_id}"
+            )
 
             loop = asyncio.get_running_loop()
             task = loop.create_task(
@@ -2148,10 +2166,16 @@ class Memori:
 
         # CRITICAL FIX: Ensure context is set before making any OpenAI calls
         # This is a safety check in case context wasn't propagated correctly
-        from ..integrations.openai_integration import set_active_memori_context, get_active_memori_context
+        from ..integrations.openai_integration import (
+            get_active_memori_context,
+            set_active_memori_context,
+        )
+
         current_context = get_active_memori_context()
         if current_context != self:
-            logger.debug(f"Context mismatch detected in async processing, setting to user_id={self.user_id}")
+            logger.debug(
+                f"Context mismatch detected in async processing, setting to user_id={self.user_id}"
+            )
             set_active_memori_context(self)
 
         try:
@@ -2514,8 +2538,8 @@ class Memori:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 # No event loop running, create a new thread for async tasks
-                import threading
                 import contextvars
+                import threading
 
                 # CRITICAL FIX: Capture the current context before creating the thread
                 # This ensures the Memori instance context propagates to background tasks
@@ -2526,12 +2550,16 @@ class Memori:
 
                 # Ensure this instance is set as active before copying context
                 set_active_memori_context(self)
-                logger.debug(f"Captured context for background thread: user_id={self.user_id}")
+                logger.debug(
+                    f"Captured context for background thread: user_id={self.user_id}"
+                )
 
                 def run_background_loop():
                     # Set the context in the new thread
                     set_active_memori_context(self)
-                    logger.debug(f"Set context in background thread: user_id={self.user_id}")
+                    logger.debug(
+                        f"Set context in background thread: user_id={self.user_id}"
+                    )
 
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
@@ -2544,7 +2572,9 @@ class Memori:
 
                 thread = threading.Thread(target=run_background_loop, daemon=True)
                 thread.start()
-                logger.info(f"Background analysis started in separate thread for user_id={self.user_id}")
+                logger.info(
+                    f"Background analysis started in separate thread for user_id={self.user_id}"
+                )
                 return
 
             # If we have a running loop, schedule the task

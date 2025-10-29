@@ -1,13 +1,13 @@
 """Security utilities for Memori"""
 
 from .auth import (
-    AuthProvider,
-    NoAuthProvider,
-    JWTAuthProvider,
     APIKeyAuthProvider,
-    create_auth_provider,
     AuthenticationError,
     AuthorizationError,
+    AuthProvider,
+    JWTAuthProvider,
+    NoAuthProvider,
+    create_auth_provider,
 )
 
 __all__ = [

@@ -33,12 +33,12 @@ Usage:
     # Conversation is automatically recorded to Memori
 """
 
-from contextvars import ContextVar
-from loguru import logger
 import time
 import uuid
-from typing import Optional
+from contextvars import ContextVar
 from dataclasses import dataclass, field
+
+from loguru import logger
 
 # Global registry of enabled Memori instances
 _enabled_memori_instances = []
@@ -55,12 +55,13 @@ class MemoriContext:
     - A unique request ID
     - Whether the context is still active
     """
+
     memori_instance: any
     request_id: str
     created_at: float = field(default_factory=time.time)
     is_active: bool = True
 
-    def validate(self, max_age_seconds: int = 300) -> tuple[bool, Optional[str]]:
+    def validate(self, max_age_seconds: int = 300) -> tuple[bool, str | None]:
         """
         Validate that context is still valid for use.
 
@@ -81,13 +82,12 @@ class MemoriContext:
 
 
 # Context variable for multi-tenant isolation
-_active_memori_context: ContextVar[Optional[MemoriContext]] = ContextVar(
-    "active_memori_context",
-    default=None
+_active_memori_context: ContextVar[MemoriContext | None] = ContextVar(
+    "active_memori_context", default=None
 )
 
 
-def set_active_memori_context(memori_instance, request_id: Optional[str] = None):
+def set_active_memori_context(memori_instance, request_id: str | None = None):
     """
     Set the active Memori instance for the current context (thread/request).
 
@@ -132,8 +132,7 @@ def set_active_memori_context(memori_instance, request_id: Optional[str] = None)
 
     # Create new context with validation
     context = MemoriContext(
-        memori_instance=memori_instance,
-        request_id=request_id or str(uuid.uuid4())
+        memori_instance=memori_instance, request_id=request_id or str(uuid.uuid4())
     )
     _active_memori_context.set(context)
 
@@ -181,9 +180,7 @@ def get_active_memori_context(require_valid: bool = True):
                 f"Active Memori context {context.request_id} is invalid: {error_msg}. "
                 f"Age: {time.time() - context.created_at:.1f}s"
             )
-        logger.warning(
-            f"Context {context.request_id} validation failed: {error_msg}"
-        )
+        logger.warning(f"Context {context.request_id} validation failed: {error_msg}")
         return None
 
     return context.memori_instance
@@ -373,7 +370,9 @@ class OpenAIInterceptor:
         active_memori = get_active_memori_context(require_valid=False)
 
         # Use active context if set, otherwise fall back to all instances (backward compatibility)
-        memori_instances = [active_memori] if active_memori else _enabled_memori_instances
+        memori_instances = (
+            [active_memori] if active_memori else _enabled_memori_instances
+        )
 
         if not memori_instances:
             logger.debug("No Memori instances available for context injection")
@@ -459,7 +458,9 @@ class OpenAIInterceptor:
         active_memori = get_active_memori_context(require_valid=False)
 
         # Use active context if set, otherwise fall back to all instances (backward compatibility)
-        memori_instances = [active_memori] if active_memori else _enabled_memori_instances
+        memori_instances = (
+            [active_memori] if active_memori else _enabled_memori_instances
+        )
 
         if not memori_instances:
             logger.debug("No Memori instances available for conversation recording")
@@ -643,7 +644,9 @@ def register_memori_instance(memori_instance):
         )
 
         # Auto-set context if this is the only instance (backward compatibility)
-        if len(_enabled_memori_instances) == 1 and not get_active_memori_context(require_valid=False):
+        if len(_enabled_memori_instances) == 1 and not get_active_memori_context(
+            require_valid=False
+        ):
             set_active_memori_context(memori_instance)
             logger.debug("Auto-set active context for single Memori instance")
 

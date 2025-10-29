@@ -499,7 +499,7 @@ class SQLAlchemyDatabaseManager:
         """Get search service instance with fresh session and proper error handling"""
         session = None
         try:
-            if not hasattr(self, 'SessionLocal') or not self.SessionLocal:
+            if not hasattr(self, "SessionLocal") or not self.SessionLocal:
                 logger.error("SessionLocal not available for search service")
                 return None
 
@@ -522,8 +522,10 @@ class SQLAlchemyDatabaseManager:
             search_service = SearchService(session, self.database_type)
 
             # Verify SearchService was initialized correctly
-            if not hasattr(search_service, 'session') or search_service.session is None:
-                logger.error("SearchService was not properly initialized with a session")
+            if not hasattr(search_service, "session") or search_service.session is None:
+                logger.error(
+                    "SearchService was not properly initialized with a session"
+                )
                 if session:
                     session.close()
                 return None
@@ -628,8 +630,12 @@ class SQLAlchemyDatabaseManager:
                 raise DatabaseError(f"Failed to get chat history: {e}")
 
     def store_long_term_memory_enhanced(
-        self, memory: ProcessedLongTermMemory, chat_id: str, user_id: str = "default",
-        assistant_id: str = None, session_id: str = "default"
+        self,
+        memory: ProcessedLongTermMemory,
+        chat_id: str,
+        user_id: str = "default",
+        assistant_id: str = None,
+        session_id: str = "default",
     ) -> str:
         """Store a ProcessedLongTermMemory with enhanced schema and multi-tenant isolation"""
         memory_id = str(uuid.uuid4())

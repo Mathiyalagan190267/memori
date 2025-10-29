@@ -25,17 +25,20 @@ Usage:
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Any
+
 from loguru import logger
 
 
 class AuthenticationError(Exception):
     """Raised when authentication fails"""
+
     pass
 
 
 class AuthorizationError(Exception):
     """Raised when authorization check fails"""
+
     pass
 
 
@@ -100,7 +103,7 @@ class AuthProvider(ABC):
         """
         pass
 
-    def extract_user_id(self, auth_token: str) -> Optional[str]:
+    def extract_user_id(self, auth_token: str) -> str | None:
         """
         Extract user_id from auth token (optional, for convenience).
 
@@ -169,6 +172,7 @@ class JWTAuthProvider(AuthProvider):
 
         try:
             import jose.jwt
+
             self.jwt = jose.jwt
         except ImportError:
             raise ImportError(
@@ -176,7 +180,7 @@ class JWTAuthProvider(AuthProvider):
                 "Install with: pip install python-jose[cryptography]"
             )
 
-    def _decode_token(self, auth_token: str) -> Dict[str, Any]:
+    def _decode_token(self, auth_token: str) -> dict[str, Any]:
         """Decode and validate JWT token"""
         try:
             # Remove "Bearer " prefix if present
@@ -184,9 +188,7 @@ class JWTAuthProvider(AuthProvider):
                 auth_token = auth_token[7:]
 
             payload = self.jwt.decode(
-                auth_token,
-                self.secret_key,
-                algorithms=[self.algorithm]
+                auth_token, self.secret_key, algorithms=[self.algorithm]
             )
             return payload
         except self.jwt.JWTError as e:
@@ -257,7 +259,7 @@ class JWTAuthProvider(AuthProvider):
         except AuthenticationError:
             return False
 
-    def extract_user_id(self, auth_token: str) -> Optional[str]:
+    def extract_user_id(self, auth_token: str) -> str | None:
         """Extract user_id from JWT"""
         try:
             payload = self._decode_token(auth_token)
@@ -289,7 +291,7 @@ class APIKeyAuthProvider(AuthProvider):
         """
         self.api_key_validator = api_key_validator
 
-    def _get_user_info(self, auth_token: str) -> Optional[Dict[str, Any]]:
+    def _get_user_info(self, auth_token: str) -> dict[str, Any] | None:
         """Get user info from API key"""
         try:
             # Remove "Bearer " or "ApiKey " prefix if present
@@ -334,16 +336,13 @@ class APIKeyAuthProvider(AuthProvider):
 
         return user_info.get("user_id") == user_id
 
-    def extract_user_id(self, auth_token: str) -> Optional[str]:
+    def extract_user_id(self, auth_token: str) -> str | None:
         """Extract user_id from API key"""
         user_info = self._get_user_info(auth_token)
         return user_info.get("user_id") if user_info else None
 
 
-def create_auth_provider(
-    provider_type: str = "jwt",
-    **kwargs
-) -> AuthProvider:
+def create_auth_provider(provider_type: str = "jwt", **kwargs) -> AuthProvider:
     """
     Factory function to create auth providers.
 

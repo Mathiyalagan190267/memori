@@ -561,8 +561,9 @@ class SearchService:
             # Prepare query for tsquery - handle spaces and special characters
             # Remove/sanitize special characters that cause tsquery syntax errors
             import re
+
             # Remove special characters, keep only alphanumeric and spaces
-            sanitized_query = re.sub(r'[^\w\s]', ' ', query)
+            sanitized_query = re.sub(r"[^\w\s]", " ", query)
             # Convert to tsquery format (join words with &)
             tsquery_text = " & ".join(sanitized_query.split())
 
@@ -927,9 +928,7 @@ class SearchService:
                 )
 
             if session_id:
-                long_query = long_query.filter(
-                    LongTermMemory.session_id == session_id
-                )
+                long_query = long_query.filter(LongTermMemory.session_id == session_id)
 
             if category_filter:
                 long_query = long_query.filter(
@@ -1028,17 +1027,21 @@ class SearchService:
         ALLOWED_SORT_FIELDS = {
             "created_at": "created_at",
             "importance": "importance_score",
-            "category": "category_primary"
+            "category": "category_primary",
         }
         ALLOWED_MEMORY_TYPES = ["all", "short_term", "long_term"]
         ALLOWED_ORDERS = ["asc", "desc"]
 
         if memory_type not in ALLOWED_MEMORY_TYPES:
-            logger.warning(f"[LIST] Invalid memory_type: {memory_type}, defaulting to 'all'")
+            logger.warning(
+                f"[LIST] Invalid memory_type: {memory_type}, defaulting to 'all'"
+            )
             memory_type = "all"
 
         if sort_by not in ALLOWED_SORT_FIELDS:
-            logger.warning(f"[LIST] Invalid sort_by: {sort_by}, defaulting to 'created_at'")
+            logger.warning(
+                f"[LIST] Invalid sort_by: {sort_by}, defaulting to 'created_at'"
+            )
             sort_by = "created_at"
         else:
             # Map to actual field name
@@ -1055,17 +1058,37 @@ class SearchService:
             # CRITICAL FIX - Priority 1: Use UNION ALL for memory_type="all"
             if memory_type == "all":
                 return self._list_all_memories_combined(
-                    user_id, assistant_id, session_id, limit, offset, sort_by, order_clause
+                    user_id,
+                    assistant_id,
+                    session_id,
+                    limit,
+                    offset,
+                    sort_by,
+                    order_clause,
                 )
             elif memory_type == "short_term":
                 return self._list_single_type_memories(
-                    ShortTermMemory, "short_term", user_id, assistant_id,
-                    session_id, limit, offset, sort_by, order_clause
+                    ShortTermMemory,
+                    "short_term",
+                    user_id,
+                    assistant_id,
+                    session_id,
+                    limit,
+                    offset,
+                    sort_by,
+                    order_clause,
                 )
             else:  # long_term
                 return self._list_single_type_memories(
-                    LongTermMemory, "long_term", user_id, assistant_id,
-                    session_id, limit, offset, sort_by, order_clause
+                    LongTermMemory,
+                    "long_term",
+                    user_id,
+                    assistant_id,
+                    session_id,
+                    limit,
+                    offset,
+                    sort_by,
+                    order_clause,
                 )
 
         except (AttributeError, KeyError) as e:
@@ -1095,48 +1118,56 @@ class SearchService:
             # Build short-term query
             # CRITICAL: All columns must have explicit .label() for UNION ALL subquery column access
             short_select = self.session.query(
-                ShortTermMemory.memory_id.label('memory_id'),
-                literal('short_term').label('memory_type'),
-                ShortTermMemory.processed_data.label('processed_data'),
-                ShortTermMemory.importance_score.label('importance_score'),
-                ShortTermMemory.created_at.label('created_at'),
-                ShortTermMemory.summary.label('summary'),
-                ShortTermMemory.category_primary.label('category_primary'),
-                ShortTermMemory.user_id.label('user_id'),
-                ShortTermMemory.assistant_id.label('assistant_id'),
-                ShortTermMemory.session_id.label('session_id'),
+                ShortTermMemory.memory_id.label("memory_id"),
+                literal("short_term").label("memory_type"),
+                ShortTermMemory.processed_data.label("processed_data"),
+                ShortTermMemory.importance_score.label("importance_score"),
+                ShortTermMemory.created_at.label("created_at"),
+                ShortTermMemory.summary.label("summary"),
+                ShortTermMemory.category_primary.label("category_primary"),
+                ShortTermMemory.user_id.label("user_id"),
+                ShortTermMemory.assistant_id.label("assistant_id"),
+                ShortTermMemory.session_id.label("session_id"),
             )
 
             # Apply filters conditionally (only if provided)
             if user_id is not None:
                 short_select = short_select.filter(ShortTermMemory.user_id == user_id)
             if assistant_id is not None:
-                short_select = short_select.filter(ShortTermMemory.assistant_id == assistant_id)
+                short_select = short_select.filter(
+                    ShortTermMemory.assistant_id == assistant_id
+                )
             if session_id is not None:
-                short_select = short_select.filter(ShortTermMemory.session_id == session_id)
+                short_select = short_select.filter(
+                    ShortTermMemory.session_id == session_id
+                )
 
             # Build long-term query
             # CRITICAL: All columns must have explicit .label() for UNION ALL subquery column access
             long_select = self.session.query(
-                LongTermMemory.memory_id.label('memory_id'),
-                literal('long_term').label('memory_type'),
-                LongTermMemory.processed_data.label('processed_data'),
-                LongTermMemory.importance_score.label('importance_score'),
-                LongTermMemory.created_at.label('created_at'),
-                LongTermMemory.summary.label('summary'),
-                LongTermMemory.category_primary.label('category_primary'),
-                LongTermMemory.user_id.label('user_id'),
-                LongTermMemory.assistant_id.label('assistant_id'),
-                LongTermMemory.session_id.label('session_id'),
+                LongTermMemory.memory_id.label("memory_id"),
+                literal("long_term").label("memory_type"),
+                LongTermMemory.processed_data.label("processed_data"),
+                LongTermMemory.importance_score.label("importance_score"),
+                LongTermMemory.created_at.label("created_at"),
+                LongTermMemory.summary.label("summary"),
+                LongTermMemory.category_primary.label("category_primary"),
+                LongTermMemory.user_id.label("user_id"),
+                LongTermMemory.assistant_id.label("assistant_id"),
+                LongTermMemory.session_id.label("session_id"),
             )
 
             # Apply filters conditionally (only if provided)
             if user_id is not None:
                 long_select = long_select.filter(LongTermMemory.user_id == user_id)
             if assistant_id is not None:
-                long_select = long_select.filter(LongTermMemory.assistant_id == assistant_id)
+                long_select = long_select.filter(
+                    LongTermMemory.assistant_id == assistant_id
+                )
             if session_id is not None:
-                long_select = long_select.filter(LongTermMemory.session_id == session_id)
+                long_select = long_select.filter(
+                    LongTermMemory.session_id == session_id
+                )
 
             # Combine with UNION ALL
             combined = union_all(short_select, long_select).subquery()
@@ -1154,18 +1185,20 @@ class SearchService:
             # Convert to dictionaries
             formatted_results = []
             for row in results:
-                formatted_results.append({
-                    "memory_id": row.memory_id,
-                    "memory_type": row.memory_type,
-                    "processed_data": row.processed_data,
-                    "importance_score": row.importance_score,
-                    "created_at": row.created_at,
-                    "summary": row.summary,
-                    "category_primary": row.category_primary,
-                    "user_id": row.user_id,
-                    "assistant_id": row.assistant_id,
-                    "session_id": row.session_id,
-                })
+                formatted_results.append(
+                    {
+                        "memory_id": row.memory_id,
+                        "memory_type": row.memory_type,
+                        "processed_data": row.processed_data,
+                        "importance_score": row.importance_score,
+                        "created_at": row.created_at,
+                        "summary": row.summary,
+                        "category_primary": row.category_primary,
+                        "user_id": row.user_id,
+                        "assistant_id": row.assistant_id,
+                        "session_id": row.session_id,
+                    }
+                )
 
             logger.debug(
                 f"[LIST] Combined query completed - {len(formatted_results)} results returned (total: {total_count})"
@@ -1219,18 +1252,20 @@ class SearchService:
             # Convert to dictionaries
             formatted_results = []
             for result in results:
-                formatted_results.append({
-                    "memory_id": result.memory_id,
-                    "memory_type": memory_type,
-                    "processed_data": result.processed_data,
-                    "importance_score": result.importance_score,
-                    "created_at": result.created_at,
-                    "summary": result.summary,
-                    "category_primary": result.category_primary,
-                    "user_id": result.user_id,
-                    "assistant_id": result.assistant_id,
-                    "session_id": result.session_id,
-                })
+                formatted_results.append(
+                    {
+                        "memory_id": result.memory_id,
+                        "memory_type": memory_type,
+                        "processed_data": result.processed_data,
+                        "importance_score": result.importance_score,
+                        "created_at": result.created_at,
+                        "summary": result.summary,
+                        "category_primary": result.category_primary,
+                        "user_id": result.user_id,
+                        "assistant_id": result.assistant_id,
+                        "session_id": result.session_id,
+                    }
+                )
 
             logger.debug(
                 f"[LIST] Single type query completed - {len(formatted_results)} results returned (total: {total_count})"
@@ -1239,7 +1274,9 @@ class SearchService:
             return formatted_results, total_count
 
         except Exception as e:
-            logger.error(f"[LIST] Error in single type memory query: {e}", exc_info=True)
+            logger.error(
+                f"[LIST] Error in single type memory query: {e}", exc_info=True
+            )
             raise
 
     def get_list_metadata(
@@ -1291,18 +1328,28 @@ class SearchService:
             metadata["available_filters"]["user_ids"] = sorted(list(all_users))
 
             # Get distinct assistant_ids
-            base_short_query = self.session.query(ShortTermMemory.assistant_id).distinct()
+            base_short_query = self.session.query(
+                ShortTermMemory.assistant_id
+            ).distinct()
             base_long_query = self.session.query(LongTermMemory.assistant_id).distinct()
 
             # Apply user_id filter if provided
             if user_id is not None:
-                base_short_query = base_short_query.filter(ShortTermMemory.user_id == user_id)
-                base_long_query = base_long_query.filter(LongTermMemory.user_id == user_id)
+                base_short_query = base_short_query.filter(
+                    ShortTermMemory.user_id == user_id
+                )
+                base_long_query = base_long_query.filter(
+                    LongTermMemory.user_id == user_id
+                )
 
             # Apply assistant_id filter if provided
             if assistant_id is not None:
-                base_short_query = base_short_query.filter(ShortTermMemory.assistant_id == assistant_id)
-                base_long_query = base_long_query.filter(LongTermMemory.assistant_id == assistant_id)
+                base_short_query = base_short_query.filter(
+                    ShortTermMemory.assistant_id == assistant_id
+                )
+                base_long_query = base_long_query.filter(
+                    LongTermMemory.assistant_id == assistant_id
+                )
 
             short_assistants = base_short_query.all()
             long_assistants = base_long_query.all()
@@ -1310,16 +1357,26 @@ class SearchService:
                 [a[0] for a in short_assistants if a[0]]
                 + [a[0] for a in long_assistants if a[0]]
             )
-            metadata["available_filters"]["assistant_ids"] = sorted(list(all_assistants))
+            metadata["available_filters"]["assistant_ids"] = sorted(
+                list(all_assistants)
+            )
 
             # Get distinct session_ids
-            short_sessions_query = self.session.query(ShortTermMemory.session_id).distinct()
-            long_sessions_query = self.session.query(LongTermMemory.session_id).distinct()
+            short_sessions_query = self.session.query(
+                ShortTermMemory.session_id
+            ).distinct()
+            long_sessions_query = self.session.query(
+                LongTermMemory.session_id
+            ).distinct()
 
             # Apply user_id filter if provided
             if user_id is not None:
-                short_sessions_query = short_sessions_query.filter(ShortTermMemory.user_id == user_id)
-                long_sessions_query = long_sessions_query.filter(LongTermMemory.user_id == user_id)
+                short_sessions_query = short_sessions_query.filter(
+                    ShortTermMemory.user_id == user_id
+                )
+                long_sessions_query = long_sessions_query.filter(
+                    LongTermMemory.user_id == user_id
+                )
 
             short_sessions = short_sessions_query.all()
             long_sessions = long_sessions_query.all()
@@ -1335,8 +1392,12 @@ class SearchService:
 
             # Apply user_id filter if provided
             if user_id is not None:
-                short_count_query = short_count_query.filter(ShortTermMemory.user_id == user_id)
-                long_count_query = long_count_query.filter(LongTermMemory.user_id == user_id)
+                short_count_query = short_count_query.filter(
+                    ShortTermMemory.user_id == user_id
+                )
+                long_count_query = long_count_query.filter(
+                    LongTermMemory.user_id == user_id
+                )
 
             short_count = short_count_query.count()
             long_count = long_count_query.count()
@@ -1355,18 +1416,20 @@ class SearchService:
 
             # Apply user_id filter if provided
             if user_id is not None:
-                short_categories_query = short_categories_query.filter(ShortTermMemory.user_id == user_id)
-                long_categories_query = long_categories_query.filter(LongTermMemory.user_id == user_id)
+                short_categories_query = short_categories_query.filter(
+                    ShortTermMemory.user_id == user_id
+                )
+                long_categories_query = long_categories_query.filter(
+                    LongTermMemory.user_id == user_id
+                )
 
-            short_categories = (
-                short_categories_query.group_by(ShortTermMemory.category_primary).all()
-            )
+            short_categories = short_categories_query.group_by(
+                ShortTermMemory.category_primary
+            ).all()
 
-            long_categories = (
-                long_categories_query
-                .group_by(LongTermMemory.category_primary)
-                .all()
-            )
+            long_categories = long_categories_query.group_by(
+                LongTermMemory.category_primary
+            ).all()
 
             # Combine category counts
             category_counts = {}

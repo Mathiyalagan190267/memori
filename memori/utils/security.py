@@ -7,8 +7,9 @@ in multi-tenant environments, including user_id validation and audit logging.
 
 import functools
 import inspect
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from .exceptions import SecurityError
 from .logging import get_logger
@@ -42,7 +43,7 @@ def require_user_id(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Extract user_id from kwargs or positional args
-        user_id = kwargs.get('user_id')
+        user_id = kwargs.get("user_id")
 
         # If not in kwargs, try to find it in positional args using function signature
         if user_id is None:
@@ -51,7 +52,7 @@ def require_user_id(func: Callable) -> Callable:
 
             # Find position of user_id parameter
             try:
-                user_id_index = param_names.index('user_id')
+                user_id_index = param_names.index("user_id")
                 if user_id_index < len(args):
                     user_id = args[user_id_index]
             except (ValueError, IndexError):
@@ -63,7 +64,7 @@ def require_user_id(func: Callable) -> Callable:
                 message=f"{func.__name__} requires a valid user_id parameter for multi-tenant isolation",
                 security_check="require_user_id",
                 operation=func.__name__,
-                error_code="MISSING_USER_ID"
+                error_code="MISSING_USER_ID",
             )
 
         # Validate user_id is not empty
@@ -73,7 +74,7 @@ def require_user_id(func: Callable) -> Callable:
                 security_check="require_user_id",
                 user_id=str(user_id),
                 operation=func.__name__,
-                error_code="INVALID_USER_ID"
+                error_code="INVALID_USER_ID",
             )
 
         # Warn if using 'default' user_id (should only be for dev/testing)
@@ -114,7 +115,7 @@ def require_valid_session_id(func: Callable) -> Callable:
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        session_id = kwargs.get('session_id')
+        session_id = kwargs.get("session_id")
 
         # If not in kwargs, try positional args
         if session_id is None:
@@ -122,7 +123,7 @@ def require_valid_session_id(func: Callable) -> Callable:
             param_names = list(sig.parameters.keys())
 
             try:
-                session_id_index = param_names.index('session_id')
+                session_id_index = param_names.index("session_id")
                 if session_id_index < len(args):
                     session_id = args[session_id_index]
             except (ValueError, IndexError):
@@ -134,7 +135,7 @@ def require_valid_session_id(func: Callable) -> Callable:
                 message=f"{func.__name__} requires a valid session_id parameter",
                 security_check="require_valid_session_id",
                 operation=func.__name__,
-                error_code="MISSING_SESSION_ID"
+                error_code="MISSING_SESSION_ID",
             )
 
         if not isinstance(session_id, str) or not session_id.strip():
@@ -142,7 +143,7 @@ def require_valid_session_id(func: Callable) -> Callable:
                 message=f"{func.__name__} requires a non-empty session_id string",
                 security_check="require_valid_session_id",
                 operation=func.__name__,
-                error_code="INVALID_SESSION_ID"
+                error_code="INVALID_SESSION_ID",
             )
 
         return func(*args, **kwargs)
@@ -156,7 +157,7 @@ def audit_log(
     resource_id: str | None = None,
     success: bool = True,
     details: dict[str, Any] | None = None,
-    level: str = "info"
+    level: str = "info",
 ):
     """
     Log security-relevant operations for audit trail.
@@ -173,12 +174,12 @@ def audit_log(
         audit_log("delete_memory", user_id="user123", resource_id="mem_456", success=True)
     """
     log_entry = {
-        'timestamp': datetime.utcnow().isoformat(),
-        'operation': operation,
-        'user_id': user_id,
-        'resource_id': resource_id,
-        'success': success,
-        'details': details or {}
+        "timestamp": datetime.utcnow().isoformat(),
+        "operation": operation,
+        "user_id": user_id,
+        "resource_id": resource_id,
+        "success": success,
+        "details": details or {},
     }
 
     log_message = f"[AUDIT] {operation} | user_id={user_id}"
@@ -188,11 +189,11 @@ def audit_log(
 
     # Log at appropriate level
     if level == "error" or not success:
-        logger.error(log_message, extra={'audit_data': log_entry})
+        logger.error(log_message, extra={"audit_data": log_entry})
     elif level == "warning":
-        logger.warning(log_message, extra={'audit_data': log_entry})
+        logger.warning(log_message, extra={"audit_data": log_entry})
     else:
-        logger.info(log_message, extra={'audit_data': log_entry})
+        logger.info(log_message, extra={"audit_data": log_entry})
 
 
 def sanitize_for_logging(data: dict[str, Any]) -> dict[str, Any]:
@@ -210,8 +211,15 @@ def sanitize_for_logging(data: dict[str, Any]) -> dict[str, Any]:
         # Returns: {"user": "john", "password": "***REDACTED***"}
     """
     sensitive_fields = {
-        'password', 'token', 'api_key', 'secret', 'credential',
-        'auth', 'private_key', 'access_token', 'refresh_token'
+        "password",
+        "token",
+        "api_key",
+        "secret",
+        "credential",
+        "auth",
+        "private_key",
+        "access_token",
+        "refresh_token",
     }
 
     def is_sensitive(key: str) -> bool:
@@ -219,10 +227,7 @@ def sanitize_for_logging(data: dict[str, Any]) -> dict[str, Any]:
         key_lower = key.lower()
         return any(sensitive in key_lower for sensitive in sensitive_fields)
 
-    return {
-        k: '***REDACTED***' if is_sensitive(k) else v
-        for k, v in data.items()
-    }
+    return {k: "***REDACTED***" if is_sensitive(k) else v for k, v in data.items()}
 
 
 def validate_memory_id(memory_id: str) -> str:
@@ -245,14 +250,14 @@ def validate_memory_id(memory_id: str) -> str:
         raise SecurityError(
             message="memory_id must be a string",
             security_check="validate_memory_id",
-            error_code="INVALID_MEMORY_ID_TYPE"
+            error_code="INVALID_MEMORY_ID_TYPE",
         )
 
     if not memory_id.strip():
         raise SecurityError(
             message="memory_id cannot be empty",
             security_check="validate_memory_id",
-            error_code="EMPTY_MEMORY_ID"
+            error_code="EMPTY_MEMORY_ID",
         )
 
     # Check length (reasonable limit to prevent DOS)
@@ -260,11 +265,11 @@ def validate_memory_id(memory_id: str) -> str:
         raise SecurityError(
             message="memory_id exceeds maximum length of 255 characters",
             security_check="validate_memory_id",
-            error_code="MEMORY_ID_TOO_LONG"
+            error_code="MEMORY_ID_TOO_LONG",
         )
 
     # Optional: Check for suspicious patterns
-    suspicious_patterns = ["'", '"', ';', '--', '/*', '*/', 'DROP', 'DELETE', 'UPDATE']
+    suspicious_patterns = ["'", '"', ";", "--", "/*", "*/", "DROP", "DELETE", "UPDATE"]
     memory_id_upper = memory_id.upper()
 
     for pattern in suspicious_patterns:
@@ -291,18 +296,18 @@ def escape_sql_like_pattern(value: str) -> str:
         # Returns: "test\\_value\\%"
     """
     # Escape backslash first, then % and _
-    escaped = value.replace('\\', '\\\\')
-    escaped = escaped.replace('%', '\\%')
-    escaped = escaped.replace('_', '\\_')
+    escaped = value.replace("\\", "\\\\")
+    escaped = escaped.replace("%", "\\%")
+    escaped = escaped.replace("_", "\\_")
     return escaped
 
 
 # Export public API
 __all__ = [
-    'require_user_id',
-    'require_valid_session_id',
-    'audit_log',
-    'sanitize_for_logging',
-    'validate_memory_id',
-    'escape_sql_like_pattern',
+    "require_user_id",
+    "require_valid_session_id",
+    "audit_log",
+    "sanitize_for_logging",
+    "validate_memory_id",
+    "escape_sql_like_pattern",
 ]

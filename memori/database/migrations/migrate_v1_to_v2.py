@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 try:
-    from sqlalchemy import create_engine, text, inspect
+    from sqlalchemy import create_engine, inspect, text
 except ImportError:
     print("ERROR: SQLAlchemy is required. Install with: pip install sqlalchemy")
     sys.exit(1)
@@ -45,12 +45,12 @@ class MigrationHelper:
 
     def _detect_db_type(self, url: str) -> str:
         """Detect database type from connection string"""
-        if url.startswith('postgresql'):
-            return 'postgresql'
-        elif url.startswith('mysql'):
-            return 'mysql'
-        elif url.startswith('sqlite'):
-            return 'sqlite'
+        if url.startswith("postgresql"):
+            return "postgresql"
+        elif url.startswith("mysql"):
+            return "mysql"
+        elif url.startswith("sqlite"):
+            return "sqlite"
         else:
             raise ValueError(f"Unsupported database type in URL: {url}")
 
@@ -63,9 +63,9 @@ class MigrationHelper:
         """Create database backup before migration"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        if self.db_type == 'sqlite':
+        if self.db_type == "sqlite":
             # For SQLite, copy the file
-            db_path = self.database_url.replace('sqlite:///', '')
+            db_path = self.database_url.replace("sqlite:///", "")
             backup_path = f"{db_path}.backup_{timestamp}"
 
             if self.dry_run:
@@ -74,6 +74,7 @@ class MigrationHelper:
 
             try:
                 import shutil
+
                 shutil.copy2(db_path, backup_path)
                 print(f"✓ Created SQLite backup: {backup_path}")
             except Exception as e:
@@ -81,30 +82,30 @@ class MigrationHelper:
                 if not self.force:
                     sys.exit(1)
 
-        elif self.db_type == 'postgresql':
-            print(f"\n⚠️  IMPORTANT: Create PostgreSQL backup manually:")
+        elif self.db_type == "postgresql":
+            print("\n⚠️  IMPORTANT: Create PostgreSQL backup manually:")
             print(f"   pg_dump {self._get_db_name()} > backup_{timestamp}.sql")
 
             if not self.force:
                 response = input("\nHave you created a backup? (yes/no): ")
-                if response.lower() != 'yes':
+                if response.lower() != "yes":
                     print("Migration cancelled. Please create a backup first.")
                     sys.exit(1)
 
-        elif self.db_type == 'mysql':
-            print(f"\n⚠️  IMPORTANT: Create MySQL backup manually:")
+        elif self.db_type == "mysql":
+            print("\n⚠️  IMPORTANT: Create MySQL backup manually:")
             print(f"   mysqldump {self._get_db_name()} > backup_{timestamp}.sql")
 
             if not self.force:
                 response = input("\nHave you created a backup? (yes/no): ")
-                if response.lower() != 'yes':
+                if response.lower() != "yes":
                     print("Migration cancelled. Please create a backup first.")
                     sys.exit(1)
 
     def _get_db_name(self) -> str:
         """Extract database name from connection string"""
         parsed = urlparse(self.database_url)
-        return parsed.path.lstrip('/')
+        return parsed.path.lstrip("/")
 
     def validate_schema(self):
         """Validate that the database has the expected v1.x schema"""
@@ -115,7 +116,7 @@ class MigrationHelper:
             inspector = inspect(self.engine)
 
             # Check required tables exist
-            required_tables = ['chat_history', 'short_term_memory', 'long_term_memory']
+            required_tables = ["chat_history", "short_term_memory", "long_term_memory"]
             existing_tables = inspector.get_table_names()
 
             missing_tables = [t for t in required_tables if t not in existing_tables]
@@ -126,10 +127,12 @@ class MigrationHelper:
             print(f"✓ Found all required tables: {required_tables}")
 
             # Check if namespace column exists (v1.x schema)
-            chat_columns = [c['name'] for c in inspector.get_columns('chat_history')]
-            if 'namespace' not in chat_columns:
-                if 'user_id' in chat_columns:
-                    print("⚠️  WARNING: Database appears to already be migrated (has user_id column)")
+            chat_columns = [c["name"] for c in inspector.get_columns("chat_history")]
+            if "namespace" not in chat_columns:
+                if "user_id" in chat_columns:
+                    print(
+                        "⚠️  WARNING: Database appears to already be migrated (has user_id column)"
+                    )
                     if not self.force:
                         print("Use --force to run migration anyway")
                         return False
@@ -151,19 +154,23 @@ class MigrationHelper:
         try:
             with self.engine.connect() as conn:
                 # Get record counts by namespace
-                tables = ['chat_history', 'short_term_memory', 'long_term_memory']
+                tables = ["chat_history", "short_term_memory", "long_term_memory"]
 
                 for table in tables:
-                    result = conn.execute(text(f"SELECT COUNT(*) as count FROM {table}"))
+                    result = conn.execute(
+                        text(f"SELECT COUNT(*) as count FROM {table}")
+                    )
                     count = result.scalar()
                     print(f"  {table}: {count} records")
 
                     # Show namespace distribution if column exists
                     try:
-                        result = conn.execute(text(
-                            f"SELECT namespace, COUNT(*) as count FROM {table} "
-                            f"GROUP BY namespace"
-                        ))
+                        result = conn.execute(
+                            text(
+                                f"SELECT namespace, COUNT(*) as count FROM {table} "
+                                f"GROUP BY namespace"
+                            )
+                        )
                         for row in result:
                             print(f"    - namespace '{row[0]}': {row[1]} records")
                     except:
@@ -185,20 +192,20 @@ class MigrationHelper:
         if self.dry_run:
             print("[DRY RUN] Would execute migration script")
             print("\nMigration script content preview:")
-            with open(script_path, 'r') as f:
+            with open(script_path) as f:
                 lines = f.readlines()[:50]  # Show first 50 lines
-                print(''.join(lines))
+                print("".join(lines))
             return True
 
         try:
             # Read migration script
-            with open(script_path, 'r') as f:
+            with open(script_path) as f:
                 migration_sql = f.read()
 
             # Execute migration
             with self.engine.connect() as conn:
                 # Split into statements (handle database-specific syntax)
-                if self.db_type == 'postgresql':
+                if self.db_type == "postgresql":
                     # PostgreSQL can handle multi-statement execution
                     conn.execute(text(migration_sql))
                     conn.commit()
@@ -225,9 +232,9 @@ class MigrationHelper:
     def _split_sql_statements(self, sql: str) -> list[str]:
         """Split SQL script into individual statements"""
         # Remove comments
-        sql = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
+        sql = re.sub(r"--.*$", "", sql, flags=re.MULTILINE)
         # Split by semicolon (naive, but works for most cases)
-        statements = sql.split(';')
+        statements = sql.split(";")
         return [s.strip() for s in statements if s.strip()]
 
     def verify_migration(self):
@@ -238,28 +245,30 @@ class MigrationHelper:
             inspector = inspect(self.engine)
 
             # Check user_id column exists
-            tables = ['chat_history', 'short_term_memory', 'long_term_memory']
+            tables = ["chat_history", "short_term_memory", "long_term_memory"]
             for table in tables:
-                columns = [c['name'] for c in inspector.get_columns(table)]
+                columns = [c["name"] for c in inspector.get_columns(table)]
 
-                if 'user_id' not in columns:
+                if "user_id" not in columns:
                     print(f"✗ {table}: user_id column missing!")
                     return False
 
-                if table == 'long_term_memory' and 'version' not in columns:
+                if table == "long_term_memory" and "version" not in columns:
                     print(f"✗ {table}: version column missing!")
                     return False
 
             # Check data migration
             with self.engine.connect() as conn:
                 for table in tables:
-                    result = conn.execute(text(
-                        f"SELECT COUNT(*) FROM {table} WHERE user_id IS NULL"
-                    ))
+                    result = conn.execute(
+                        text(f"SELECT COUNT(*) FROM {table} WHERE user_id IS NULL")
+                    )
                     null_count = result.scalar()
 
                     if null_count > 0:
-                        print(f"✗ {table}: Found {null_count} records with NULL user_id!")
+                        print(
+                            f"✗ {table}: Found {null_count} records with NULL user_id!"
+                        )
                         return False
 
             print("✓ Migration verification passed!")
@@ -268,9 +277,11 @@ class MigrationHelper:
             print("\n📊 Post-migration statistics:")
             with self.engine.connect() as conn:
                 for table in tables:
-                    result = conn.execute(text(
-                        f"SELECT user_id, COUNT(*) as count FROM {table} GROUP BY user_id"
-                    ))
+                    result = conn.execute(
+                        text(
+                            f"SELECT user_id, COUNT(*) as count FROM {table} GROUP BY user_id"
+                        )
+                    )
                     for row in result:
                         print(f"  {table} - user_id '{row[0]}': {row[1]} records")
 
@@ -284,14 +295,24 @@ class MigrationHelper:
 def main():
     """Main migration script"""
     parser = argparse.ArgumentParser(
-        description='Memori v1.x to v2.0 Migration Helper',
+        description="Memori v1.x to v2.0 Migration Helper",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
-    parser.add_argument('--database', required=True, help='Database connection string')
-    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without executing')
-    parser.add_argument('--skip-backup', action='store_true', help='Skip backup creation (not recommended)')
-    parser.add_argument('--force', action='store_true', help='Force migration even if validation fails')
+    parser.add_argument("--database", required=True, help="Database connection string")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without executing",
+    )
+    parser.add_argument(
+        "--skip-backup",
+        action="store_true",
+        help="Skip backup creation (not recommended)",
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Force migration even if validation fails"
+    )
 
     args = parser.parse_args()
 
@@ -325,7 +346,7 @@ def main():
         print("⚠️  IMPORTANT: This migration will make breaking changes!")
         print("=" * 70)
         response = input("\nProceed with migration? (yes/no): ")
-        if response.lower() != 'yes':
+        if response.lower() != "yes":
             print("Migration cancelled.")
             sys.exit(0)
 
@@ -357,5 +378,5 @@ def main():
         print("\n✅ DRY RUN COMPLETE - No changes made")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

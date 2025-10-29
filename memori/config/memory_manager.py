@@ -69,7 +69,9 @@ class MemoryManager:
         self.mem_prompt = mem_prompt
         self.conscious_ingest = conscious_ingest
         self.auto_ingest = auto_ingest
-        self.user_id = user_id or namespace or "default"  # Support both params for backward compat
+        self.user_id = (
+            user_id or namespace or "default"
+        )  # Support both params for backward compat
         self.shared_memory = shared_memory
         self.memory_filters = memory_filters or []
         self.verbose = verbose

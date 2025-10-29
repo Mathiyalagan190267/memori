@@ -136,7 +136,7 @@ print("-" * 70)
 for session_name, memori in sessions.items():
     stats = memori.get_memory_stats()
     print(f"\n{session_name.upper()} Session:")
-    print(f"  User ID: sarah_jones")
+    print("  User ID: sarah_jones")
     print(f"  Session ID: {memori.session_id}")
     print(f"  Total memories: {stats.get('total_memories', 0)}")
     print(f"  Short-term: {stats.get('short_term_count', 0)}")
@@ -262,9 +262,7 @@ while True:
                 current_session = new_session
                 print(f"Switched to {current_session.upper()} session")
             else:
-                print(
-                    f"Unknown session. Available: {', '.join(sessions.keys())}"
-                )
+                print(f"Unknown session. Available: {', '.join(sessions.keys())}")
             continue
 
         # Parse session selection from message

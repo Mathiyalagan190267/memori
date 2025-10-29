@@ -214,11 +214,14 @@ CONVERSATION CONTEXT:
                             f"Memory processing refused for chat {chat_id}: {completion.choices[0].message.refusal}"
                         )
                         return self._create_empty_long_term_memory(
-                            context.session_id if context else "default", "Processing refused for safety reasons"
+                            context.session_id if context else "default",
+                            "Processing refused for safety reasons",
                         )
 
                     processed_memory = completion.choices[0].message.parsed
-                    processed_memory.session_id = context.session_id if context else "default"
+                    processed_memory.session_id = (
+                        context.session_id if context else "default"
+                    )
                     processed_memory.extraction_timestamp = datetime.now()
 
                 except Exception as e:
@@ -251,7 +254,8 @@ CONVERSATION CONTEXT:
                 f"[AGENT] Memory processing failed for {chat_id[:8]}... - {type(e).__name__}: {e}"
             )
             return self._create_empty_long_term_memory(
-                context.session_id if context else "default", f"Processing failed: {str(e)}"
+                context.session_id if context else "default",
+                f"Processing failed: {str(e)}",
             )
 
     def _create_empty_long_term_memory(

@@ -53,9 +53,7 @@ class ConsciouscAgent:
             )
         return self._database_type
 
-    async def run_conscious_ingest(
-        self, db_manager, user_id: str = "default"
-    ) -> bool:
+    async def run_conscious_ingest(self, db_manager, user_id: str = "default") -> bool:
         """
         Run conscious context ingestion once at program startup
 
@@ -73,9 +71,7 @@ class ConsciouscAgent:
             db_type = self._detect_database_type(db_manager)
 
             # Get all conscious-info labeled memories
-            conscious_memories = await self._get_conscious_memories(
-                db_manager, user_id
-            )
+            conscious_memories = await self._get_conscious_memories(db_manager, user_id)
 
             if not conscious_memories:
                 logger.info("ConsciouscAgent: No conscious-info memories found")
@@ -398,6 +394,7 @@ class ConsciouscAgent:
 
                 # Detect database type for proper JSON handling
                 import json
+
                 db_type = str(connection.engine.dialect.name).lower()
 
                 # Serialize processed_data to JSON string
@@ -409,7 +406,7 @@ class ConsciouscAgent:
 
                 # Insert directly into short-term memory with conscious_context category
                 # Use CAST for PostgreSQL JSONB support
-                if db_type == 'postgresql':
+                if db_type == "postgresql":
                     connection.execute(
                         text(
                             """INSERT INTO short_term_memory (

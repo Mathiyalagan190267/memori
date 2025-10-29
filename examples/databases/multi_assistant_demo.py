@@ -157,7 +157,7 @@ print("-" * 70)
 for assistant_name, memori in assistants.items():
     stats = memori.get_memory_stats()
     print(f"\n{assistant_name}:")
-    print(f"  User ID: john_doe")
+    print("  User ID: john_doe")
     print(f"  Assistant ID: {assistant_name}")
     print(f"  Total memories: {stats.get('total_memories', 0)}")
     print(f"  Short-term: {stats.get('short_term_count', 0)}")

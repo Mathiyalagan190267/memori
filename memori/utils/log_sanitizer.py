@@ -16,7 +16,7 @@ Usage:
 """
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 
 class LogSanitizer:
@@ -38,49 +38,33 @@ class LogSanitizer:
     PATTERNS = [
         # Email addresses
         (
-            re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
-            '[EMAIL_REDACTED]'
+            re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+            "[EMAIL_REDACTED]",
         ),
         # SSN (US format)
-        (
-            re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
-            '[SSN_REDACTED]'
-        ),
+        (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN_REDACTED]"),
         # Credit card numbers (various formats)
-        (
-            re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'),
-            '[CARD_REDACTED]'
-        ),
+        (re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"), "[CARD_REDACTED]"),
         # Phone numbers (US format)
-        (
-            re.compile(r'\b\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b'),
-            '[PHONE_REDACTED]'
-        ),
+        (re.compile(r"\b\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b"), "[PHONE_REDACTED]"),
         # API keys and tokens (common patterns)
         (
-            re.compile(r'(?i)(api[_-]?key|token|secret|password|pwd|auth)["\']?\s*[:=]\s*["\']?[\w\-\.]{8,}'),
-            lambda m: f'{m.group(1)}=[REDACTED]'
+            re.compile(
+                r'(?i)(api[_-]?key|token|secret|password|pwd|auth)["\']?\s*[:=]\s*["\']?[\w\-\.]{8,}'
+            ),
+            lambda m: f"{m.group(1)}=[REDACTED]",
         ),
         # Bearer tokens
-        (
-            re.compile(r'Bearer\s+[\w\-\.=]+'),
-            'Bearer [TOKEN_REDACTED]'
-        ),
+        (re.compile(r"Bearer\s+[\w\-\.=]+"), "Bearer [TOKEN_REDACTED]"),
         # AWS access keys
-        (
-            re.compile(r'AKIA[0-9A-Z]{16}'),
-            '[AWS_KEY_REDACTED]'
-        ),
+        (re.compile(r"AKIA[0-9A-Z]{16}"), "[AWS_KEY_REDACTED]"),
         # JWT tokens (basic detection)
         (
-            re.compile(r'eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'),
-            '[JWT_REDACTED]'
+            re.compile(r"eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"),
+            "[JWT_REDACTED]",
         ),
         # URLs with credentials
-        (
-            re.compile(r'(https?://)[^:]+:[^@]+@'),
-            r'\1[CREDENTIALS_REDACTED]@'
-        ),
+        (re.compile(r"(https?://)[^:]+:[^@]+@"), r"\1[CREDENTIALS_REDACTED]@"),
         # Private IP addresses (optional - uncomment if needed)
         # (
         #     re.compile(r'\b(?:10|172\.(?:1[6-9]|2[0-9]|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b'),
@@ -92,8 +76,8 @@ class LogSanitizer:
     def sanitize(
         cls,
         text: Any,
-        max_length: Optional[int] = None,
-        truncate_suffix: str = "...[truncated]"
+        max_length: int | None = None,
+        truncate_suffix: str = "...[truncated]",
     ) -> str:
         """
         Sanitize sensitive data from text.
@@ -131,7 +115,7 @@ class LogSanitizer:
         return sanitized
 
     @classmethod
-    def sanitize_dict(cls, data: dict, max_length: Optional[int] = None) -> dict:
+    def sanitize_dict(cls, data: dict, max_length: int | None = None) -> dict:
         """
         Sanitize all values in a dictionary.
 
@@ -153,10 +137,7 @@ class LogSanitizer:
 
 
 # Convenience functions
-def sanitize_for_logging(
-    text: Any,
-    max_length: Optional[int] = 100
-) -> str:
+def sanitize_for_logging(text: Any, max_length: int | None = 100) -> str:
     """
     Sanitize text for safe logging.
 
@@ -173,7 +154,7 @@ def sanitize_for_logging(
     return LogSanitizer.sanitize(text, max_length=max_length)
 
 
-def sanitize_dict_for_logging(data: dict, max_length: Optional[int] = 100) -> dict:
+def sanitize_dict_for_logging(data: dict, max_length: int | None = 100) -> dict:
     """
     Sanitize dictionary for safe logging.
 
@@ -212,6 +193,7 @@ class SanitizedLogger:
         """
         if logger_instance is None:
             from loguru import logger as default_logger
+
             logger_instance = default_logger
 
         self.logger = logger_instance

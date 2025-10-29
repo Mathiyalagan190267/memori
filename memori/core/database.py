@@ -340,8 +340,12 @@ class DatabaseManager:
             return result
 
     def store_long_term_memory_enhanced(
-        self, memory: ProcessedLongTermMemory, chat_id: str, user_id: str = "default",
-        assistant_id: str = None, session_id: str = "default"
+        self,
+        memory: ProcessedLongTermMemory,
+        chat_id: str,
+        user_id: str = "default",
+        assistant_id: str = None,
+        session_id: str = "default",
     ) -> str:
         """Store a ProcessedLongTermMemory with enhanced schema using transactions and multi-tenant isolation"""
         try:
@@ -979,9 +983,7 @@ class DatabaseManager:
                     "DELETE FROM long_term_memory WHERE user_id = ?", (user_id,)
                 )
             elif memory_type == "chat_history":
-                cursor.execute(
-                    "DELETE FROM chat_history WHERE user_id = ?", (user_id,)
-                )
+                cursor.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
             else:  # Clear all
                 cursor.execute(
                     "DELETE FROM short_term_memory WHERE user_id = ?", (user_id,)
@@ -989,8 +991,6 @@ class DatabaseManager:
                 cursor.execute(
                     "DELETE FROM long_term_memory WHERE user_id = ?", (user_id,)
                 )
-                cursor.execute(
-                    "DELETE FROM chat_history WHERE user_id = ?", (user_id,)
-                )
+                cursor.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
 
             conn.commit()

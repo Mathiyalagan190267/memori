@@ -404,7 +404,8 @@ class MongoDBDatabaseManager:
             chat_collection = self._get_collection(self.CHAT_HISTORY_COLLECTION)
             chat_collection.create_index([("chat_id", 1)], unique=True, background=True)
             chat_collection.create_index(
-                [("user_id", 1), ("assistant_id", 1), ("session_id", 1)], background=True
+                [("user_id", 1), ("assistant_id", 1), ("session_id", 1)],
+                background=True,
             )
             chat_collection.create_index([("timestamp", -1)], background=True)
             chat_collection.create_index([("model", 1)], background=True)
@@ -413,7 +414,12 @@ class MongoDBDatabaseManager:
             st_collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
             st_collection.create_index([("memory_id", 1)], unique=True, background=True)
             st_collection.create_index(
-                [("user_id", 1), ("assistant_id", 1), ("category_primary", 1), ("importance_score", -1)],
+                [
+                    ("user_id", 1),
+                    ("assistant_id", 1),
+                    ("category_primary", 1),
+                    ("importance_score", -1),
+                ],
                 background=True,
             )
             st_collection.create_index([("expires_at", 1)], background=True)
@@ -457,7 +463,12 @@ class MongoDBDatabaseManager:
             lt_collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
             lt_collection.create_index([("memory_id", 1)], unique=True, background=True)
             lt_collection.create_index(
-                [("user_id", 1), ("assistant_id", 1), ("category_primary", 1), ("importance_score", -1)],
+                [
+                    ("user_id", 1),
+                    ("assistant_id", 1),
+                    ("category_primary", 1),
+                    ("importance_score", -1),
+                ],
                 background=True,
             )
             lt_collection.create_index([("classification", 1)], background=True)
@@ -643,9 +654,7 @@ class MongoDBDatabaseManager:
         category_primary: str,
         retention_type: str,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
         expires_at: datetime | None = None,
         searchable_content: str = "",
@@ -692,9 +701,7 @@ class MongoDBDatabaseManager:
         self,
         memory_id: str,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
     ) -> dict[str, Any] | None:
         """Find a specific short-term memory by memory_id"""
@@ -702,9 +709,7 @@ class MongoDBDatabaseManager:
             collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
 
             # Find memory by memory_id and namespace
-            document = collection.find_one(
-                {"memory_id": memory_id, "user_id": user_id}
-            )
+            document = collection.find_one({"memory_id": memory_id, "user_id": user_id})
 
             if document:
                 return self._convert_to_dict(document)
@@ -717,9 +722,7 @@ class MongoDBDatabaseManager:
     def get_short_term_memory(
         self,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
         category_filter: str | None = None,
         limit: int = 10,
@@ -730,7 +733,11 @@ class MongoDBDatabaseManager:
             collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
 
             # Build filter
-            filter_doc = {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+            filter_doc = {
+                "user_id": user_id,
+                "assistant_id": assistant_id,
+                "session_id": session_id,
+            }
 
             if category_filter:
                 filter_doc["category_primary"] = category_filter
@@ -765,9 +772,7 @@ class MongoDBDatabaseManager:
         self,
         query: str,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
         limit: int = 10,
     ) -> list[dict[str, Any]]:
@@ -795,7 +800,11 @@ class MongoDBDatabaseManager:
             search_filter = {
                 "$and": [
                     {"$text": {"$search": cleaned_query}},  # Use cleaned query
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id},
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    },
                     {
                         "$or": [
                             {"expires_at": {"$exists": False}},
@@ -842,9 +851,7 @@ class MongoDBDatabaseManager:
             logger.error(f"Short-term memory search failed: {e}")
             return []
 
-    def update_short_term_memory_access(
-        self, memory_id: str, user_id: str = "default"
-    ):
+    def update_short_term_memory_access(self, memory_id: str, user_id: str = "default"):
         """Update access count and last accessed time for short-term memory"""
         try:
             collection = self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION)
@@ -863,9 +870,7 @@ class MongoDBDatabaseManager:
     def get_conscious_memories(
         self,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
         processed_only: bool = False,
     ) -> list[dict[str, Any]]:
@@ -874,9 +879,12 @@ class MongoDBDatabaseManager:
             collection = self._get_collection(self.LONG_TERM_MEMORY_COLLECTION)
 
             # Build filter for conscious-info classification
-            filter_doc = {"user_id": user_id,
+            filter_doc = {
+                "user_id": user_id,
                 "assistant_id": assistant_id,
-                "session_id": session_id, "classification": "conscious-info"}
+                "session_id": session_id,
+                "classification": "conscious-info",
+            }
 
             if processed_only:
                 # Get only processed memories
@@ -905,9 +913,7 @@ class MongoDBDatabaseManager:
     def get_unprocessed_conscious_memories(
         self,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
     ) -> list[dict[str, Any]]:
         """Get unprocessed conscious-info labeled memories from long-term memory"""
@@ -964,8 +970,12 @@ class MongoDBDatabaseManager:
             logger.error(f"Failed to mark conscious memories processed: {e}")
 
     def store_long_term_memory_enhanced(
-        self, memory: ProcessedLongTermMemory, chat_id: str, user_id: str = "default",
-        assistant_id: str = None, session_id: str = "default"
+        self,
+        memory: ProcessedLongTermMemory,
+        chat_id: str,
+        user_id: str = "default",
+        assistant_id: str = None,
+        session_id: str = "default",
     ) -> str:
         """Store a ProcessedLongTermMemory in MongoDB with enhanced schema"""
         memory_id = str(uuid.uuid4())
@@ -1048,9 +1058,7 @@ class MongoDBDatabaseManager:
         self,
         query: str,
         user_id: str = "default",
-
         assistant_id: str | None = None,
-
         session_id: str = "default",
         category_filter: list[str] | None = None,
         limit: int = 10,
@@ -1092,8 +1100,8 @@ class MongoDBDatabaseManager:
                     search_filter: dict[str, Any] = {
                         "$text": {"$search": cleaned_query},
                         "user_id": user_id,
-                "assistant_id": assistant_id,
-                "session_id": session_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
                     }
 
                     # Add category filter if specified
@@ -1106,7 +1114,11 @@ class MongoDBDatabaseManager:
                         search_filter = {
                             "$and": [
                                 {"$text": {"$search": cleaned_query}},
-                                {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id},
+                                {
+                                    "user_id": user_id,
+                                    "assistant_id": assistant_id,
+                                    "session_id": session_id,
+                                },
                                 {
                                     "$or": [
                                         {"expires_at": {"$exists": False}},
@@ -1176,7 +1188,12 @@ class MongoDBDatabaseManager:
             # Return empty list to maintain compatibility with SQL manager
             return []
 
-    def get_memory_stats(self, user_id: str = "default", assistant_id: str | None = None, session_id: str = "default") -> dict[str, Any]:
+    def get_memory_stats(
+        self,
+        user_id: str = "default",
+        assistant_id: str | None = None,
+        session_id: str = "default",
+    ) -> dict[str, Any]:
         """Get comprehensive memory statistics"""
         try:
             database = self._get_database()
@@ -1186,22 +1203,46 @@ class MongoDBDatabaseManager:
             # Basic counts
             stats["chat_history_count"] = self._get_collection(
                 self.CHAT_HISTORY_COLLECTION
-            ).count_documents({"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id})
+            ).count_documents(
+                {
+                    "user_id": user_id,
+                    "assistant_id": assistant_id,
+                    "session_id": session_id,
+                }
+            )
 
             stats["short_term_count"] = self._get_collection(
                 self.SHORT_TERM_MEMORY_COLLECTION
-            ).count_documents({"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id})
+            ).count_documents(
+                {
+                    "user_id": user_id,
+                    "assistant_id": assistant_id,
+                    "session_id": session_id,
+                }
+            )
 
             stats["long_term_count"] = self._get_collection(
                 self.LONG_TERM_MEMORY_COLLECTION
-            ).count_documents({"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id})
+            ).count_documents(
+                {
+                    "user_id": user_id,
+                    "assistant_id": assistant_id,
+                    "session_id": session_id,
+                }
+            )
 
             # Category breakdown for short-term memories
             short_categories = self._get_collection(
                 self.SHORT_TERM_MEMORY_COLLECTION
             ).aggregate(
                 [
-                    {"$match": {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}},
+                    {
+                        "$match": {
+                            "user_id": user_id,
+                            "assistant_id": assistant_id,
+                            "session_id": session_id,
+                        }
+                    },
                     {"$group": {"_id": "$category_primary", "count": {"$sum": 1}}},
                 ]
             )
@@ -1215,7 +1256,13 @@ class MongoDBDatabaseManager:
                 self.LONG_TERM_MEMORY_COLLECTION
             ).aggregate(
                 [
-                    {"$match": {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}},
+                    {
+                        "$match": {
+                            "user_id": user_id,
+                            "assistant_id": assistant_id,
+                            "session_id": session_id,
+                        }
+                    },
                     {"$group": {"_id": "$category_primary", "count": {"$sum": 1}}},
                 ]
             )
@@ -1229,7 +1276,13 @@ class MongoDBDatabaseManager:
 
             # Average importance scores
             short_avg_pipeline = [
-                {"$match": {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}},
+                {
+                    "$match": {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
+                },
                 {
                     "$group": {
                         "_id": None,
@@ -1245,7 +1298,13 @@ class MongoDBDatabaseManager:
             short_avg = short_avg_result[0]["avg_importance"] if short_avg_result else 0
 
             long_avg_pipeline = [
-                {"$match": {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}},
+                {
+                    "$match": {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
+                },
                 {
                     "$group": {
                         "_id": None,
@@ -1295,37 +1354,63 @@ class MongoDBDatabaseManager:
             logger.error(f"Failed to get memory stats: {e}")
             return {"error": str(e)}
 
-    def clear_memory(self, user_id: str = "default",
- assistant_id: str | None = None,
- session_id: str = "default", memory_type: str | None = None):
+    def clear_memory(
+        self,
+        user_id: str = "default",
+        assistant_id: str | None = None,
+        session_id: str = "default",
+        memory_type: str | None = None,
+    ):
         """Clear memory data"""
         try:
             if memory_type == "short_term":
                 self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
             elif memory_type == "long_term":
                 self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
             elif memory_type == "chat_history":
                 self._get_collection(self.CHAT_HISTORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
             else:  # Clear all
                 self._get_collection(self.SHORT_TERM_MEMORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
                 self._get_collection(self.LONG_TERM_MEMORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
                 self._get_collection(self.CHAT_HISTORY_COLLECTION).delete_many(
-                    {"user_id": user_id, "assistant_id": assistant_id, "session_id": session_id}
+                    {
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "session_id": session_id,
+                    }
                 )
 
-            logger.info(
-                f"Cleared {memory_type or 'all'} memory for user_id: {user_id}"
-            )
+            logger.info(f"Cleared {memory_type or 'all'} memory for user_id: {user_id}")
 
         except Exception as e:
             logger.error(f"Failed to clear memory: {e}")

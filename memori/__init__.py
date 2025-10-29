@@ -26,7 +26,11 @@ from .core.memory import Memori
 
 # Database system
 from .database.connectors import MySQLConnector, PostgreSQLConnector, SQLiteConnector
-from .database.queries import BaseQueries, ChatQueries, MemoryQueries  # EntityQueries removed (graph search simplified)
+from .database.queries import (  # EntityQueries removed (graph search simplified)
+    BaseQueries,
+    ChatQueries,
+    MemoryQueries,
+)
 
 # Wrapper integrations
 from .integrations import MemoriAnthropic, MemoriOpenAI

@@ -74,7 +74,9 @@ class DatabaseConnectionUtils:
             default_db = cls.DEFAULT_DATABASES.get(engine)
             if engine == "postgresql" and "digitalocean.com" in host.lower():
                 default_db = "defaultdb"
-                logger.debug("DigitalOcean PostgreSQL detected - using 'defaultdb' as system database")
+                logger.debug(
+                    "DigitalOcean PostgreSQL detected - using 'defaultdb' as system database"
+                )
 
             # Preserve query parameters (especially SSL settings) for system database connections
             query_string = f"?{parsed.query}" if parsed.query else ""

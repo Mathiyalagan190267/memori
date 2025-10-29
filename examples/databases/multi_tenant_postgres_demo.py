@@ -1,7 +1,6 @@
 from openai import OpenAI
 
 from memori import Memori
-from memori.integrations.openai_integration import set_active_memori_context
 
 # Initialize OpenAI client
 openai_client = OpenAI()

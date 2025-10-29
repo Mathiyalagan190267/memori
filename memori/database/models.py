@@ -193,7 +193,9 @@ class LongTermMemory(Base):
             "category_primary",
             "importance_score",
         ),
-        Index("idx_long_term_version", "memory_id", "version"),  # For optimistic locking
+        Index(
+            "idx_long_term_version", "memory_id", "version"
+        ),  # For optimistic locking
     )
 
 

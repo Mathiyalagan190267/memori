@@ -23,29 +23,32 @@ Usage:
         ...
 """
 
-import time
 import threading
+import time
 from collections import defaultdict
-from functools import wraps
-from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import wraps
+
 from loguru import logger
 
 
 class RateLimitExceeded(Exception):
     """Raised when rate limit is exceeded"""
+
     pass
 
 
 class QuotaExceeded(Exception):
     """Raised when resource quota is exceeded"""
+
     pass
 
 
 @dataclass
 class RateLimitWindow:
     """Track rate limit for a single window"""
+
     count: int = 0
     reset_time: float = field(default_factory=lambda: time.time() + 60)
 
@@ -67,6 +70,7 @@ class RateLimitWindow:
 @dataclass
 class ResourceQuota:
     """Track resource quotas for a tenant"""
+
     memory_count: int = 0
     storage_bytes: int = 0
     api_calls_today: int = 0
@@ -94,17 +98,13 @@ class RateLimiter:
     """
 
     def __init__(self):
-        self._rate_limits: Dict[str, RateLimitWindow] = defaultdict(RateLimitWindow)
-        self._quotas: Dict[str, ResourceQuota] = defaultdict(ResourceQuota)
+        self._rate_limits: dict[str, RateLimitWindow] = defaultdict(RateLimitWindow)
+        self._quotas: dict[str, ResourceQuota] = defaultdict(ResourceQuota)
         self._lock = threading.Lock()
 
     def check_rate_limit(
-        self,
-        user_id: str,
-        operation: str,
-        limit: int = 100,
-        window_seconds: int = 60
-    ) -> tuple[bool, Optional[str]]:
+        self, user_id: str, operation: str, limit: int = 100, window_seconds: int = 60
+    ) -> tuple[bool, str | None]:
         """
         Check if user is within rate limit for operation.
 
@@ -149,8 +149,8 @@ class RateLimiter:
         self,
         user_id: str,
         additional_bytes: int,
-        limit_bytes: int = 100_000_000  # 100MB default
-    ) -> tuple[bool, Optional[str]]:
+        limit_bytes: int = 100_000_000,  # 100MB default
+    ) -> tuple[bool, str | None]:
         """
         Check if user is within storage quota.
 
@@ -178,10 +178,8 @@ class RateLimiter:
             return True, None
 
     def check_memory_count_quota(
-        self,
-        user_id: str,
-        limit: int = 10_000
-    ) -> tuple[bool, Optional[str]]:
+        self, user_id: str, limit: int = 10_000
+    ) -> tuple[bool, str | None]:
         """
         Check if user is within memory count quota.
 
@@ -207,10 +205,8 @@ class RateLimiter:
             return True, None
 
     def check_api_call_quota(
-        self,
-        user_id: str,
-        limit: int = 1_000
-    ) -> tuple[bool, Optional[str]]:
+        self, user_id: str, limit: int = 1_000
+    ) -> tuple[bool, str | None]:
         """
         Check if user is within daily API call quota.
 
@@ -239,12 +235,7 @@ class RateLimiter:
 
             return True, None
 
-    def increment_quota(
-        self,
-        user_id: str,
-        quota_type: str,
-        amount: int = 1
-    ):
+    def increment_quota(self, user_id: str, quota_type: str, amount: int = 1):
         """
         Increment quota usage.
 
@@ -267,7 +258,7 @@ class RateLimiter:
             else:
                 logger.warning(f"Unknown quota type: {quota_type}")
 
-    def get_quota_stats(self, user_id: str) -> Dict:
+    def get_quota_stats(self, user_id: str) -> dict:
         """
         Get current quota statistics for a user.
 
@@ -302,10 +293,7 @@ def get_rate_limiter() -> RateLimiter:
 
 
 def check_rate_limit(
-    user_id: str,
-    operation: str,
-    limit: int = 100,
-    window_seconds: int = 60
+    user_id: str, operation: str, limit: int = 100, window_seconds: int = 60
 ) -> bool:
     """
     Convenience function to check rate limit.
@@ -345,11 +333,12 @@ def rate_limited(operation: str, limit: int = 100, window_seconds: int = 60):
         def search(self, query: str):
             ...
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             # Get user_id from self
-            user_id = getattr(self, 'user_id', 'default')
+            user_id = getattr(self, "user_id", "default")
 
             # Check rate limit
             allowed, error = _global_limiter.check_rate_limit(
@@ -359,7 +348,9 @@ def rate_limited(operation: str, limit: int = 100, window_seconds: int = 60):
                 raise RateLimitExceeded(error)
 
             return func(self, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -375,16 +366,19 @@ def storage_quota(limit_bytes: int = 100_000_000):
         def record_conversation(self, user_input: str, ai_output: str):
             ...
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             # Get user_id from self
-            user_id = getattr(self, 'user_id', 'default')
+            user_id = getattr(self, "user_id", "default")
 
             # Estimate storage size
             user_input = kwargs.get("user_input", "")
             ai_output = kwargs.get("ai_output", "")
-            estimated_bytes = len(str(user_input).encode('utf-8')) + len(str(ai_output).encode('utf-8'))
+            estimated_bytes = len(str(user_input).encode("utf-8")) + len(
+                str(ai_output).encode("utf-8")
+            )
 
             # Check quota
             allowed, error = _global_limiter.check_storage_quota(
@@ -400,7 +394,9 @@ def storage_quota(limit_bytes: int = 100_000_000):
             _global_limiter.increment_quota(user_id, "storage_bytes", estimated_bytes)
 
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -416,11 +412,12 @@ def memory_count_quota(limit: int = 10_000):
         def record_conversation(self, ...):
             ...
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             # Get user_id from self
-            user_id = getattr(self, 'user_id', 'default')
+            user_id = getattr(self, "user_id", "default")
 
             # Check quota
             allowed, error = _global_limiter.check_memory_count_quota(user_id, limit)
@@ -434,5 +431,7 @@ def memory_count_quota(limit: int = 10_000):
             _global_limiter.increment_quota(user_id, "memory_count", 1)
 
             return result
+
         return wrapper
+
     return decorator
