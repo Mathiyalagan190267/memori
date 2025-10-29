@@ -1,4 +1,4 @@
-[![GibsonAI](https://github.com/user-attachments/assets/878e341b-5a93-4489-a398-abeca91b6b11)](https://gibsonai.com/)
+[![Memori Labs](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/banner.png)](https://memorilabs.ai/)
 
 # memori
 
@@ -237,6 +237,7 @@ memori = Memori(
     database_connect="sqlite:///my_memory.db",
     template="basic", 
     conscious_ingest=True,  # One-shot context injection
+    conscious_memory_limit=100,  # Must be an integer between 1 and 500
     openai_api_key="sk-..."
 )
 
