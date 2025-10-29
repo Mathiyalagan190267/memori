@@ -1,8 +1,9 @@
 """
-OpenAI Integration - Automatic Interception System with Multi-Tenancy Support
+OpenAI Integration - Automatic Interception System
 
 This module provides automatic interception of OpenAI API calls when Memori is enabled.
-Uses contextvars for proper isolation between concurrent requests in multi-tenant environments.
+Users can import and use the standard OpenAI client normally, and Memori will automatically
+record conversations when enabled.
 
 Usage:
     from openai import OpenAI
@@ -12,12 +13,15 @@ Usage:
     # Initialize Memori and enable it
     openai_memory = Memori(
         database_connect="sqlite:///openai_memory.db",
+        user_id="user123",
+        assistant_id="assistant1",
+        session_id="session1",
         conscious_ingest=True,
         verbose=True,
     )
     openai_memory.enable()
 
-    # Set as active for this request context (important for multi-tenancy!)
+    # Set the active context for this request/thread
     set_active_memori_context(openai_memory)
 
     # Use standard OpenAI client - automatically intercepted!
@@ -26,18 +30,183 @@ Usage:
         model="gpt-4o",
         messages=[{"role": "user", "content": "Hello!"}]
     )
-    # Conversation is automatically recorded to the active Memori instance only
+    # Conversation is automatically recorded to Memori
 """
 
-import contextvars
+from contextvars import ContextVar
 from loguru import logger
+import time
+import uuid
+from typing import Optional
+from dataclasses import dataclass, field
 
-# Context variable for tracking the active Memori instance per request
-# This ensures proper isolation in multi-tenant environments
-_active_memori_context = contextvars.ContextVar('active_memori', default=None)
-
-# Global registry of enabled Memori instances (kept for backward compatibility)
+# Global registry of enabled Memori instances
 _enabled_memori_instances = []
+
+
+# SECURITY FIX: Enhanced context management with validation and lifecycle tracking
+@dataclass
+class MemoriContext:
+    """
+    Wrapper for Memori instance with lifecycle tracking and validation.
+
+    This prevents context leakage and race conditions by tracking:
+    - When the context was created
+    - A unique request ID
+    - Whether the context is still active
+    """
+    memori_instance: any
+    request_id: str
+    created_at: float = field(default_factory=time.time)
+    is_active: bool = True
+
+    def validate(self, max_age_seconds: int = 300) -> tuple[bool, Optional[str]]:
+        """
+        Validate that context is still valid for use.
+
+        Args:
+            max_age_seconds: Maximum age of context in seconds (default 5 minutes)
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not self.is_active:
+            return False, "Context has been explicitly deactivated"
+
+        age = time.time() - self.created_at
+        if age > max_age_seconds:
+            return False, f"Context expired (age: {age:.1f}s, max: {max_age_seconds}s)"
+
+        return True, None
+
+
+# Context variable for multi-tenant isolation
+_active_memori_context: ContextVar[Optional[MemoriContext]] = ContextVar(
+    "active_memori_context",
+    default=None
+)
+
+
+def set_active_memori_context(memori_instance, request_id: Optional[str] = None):
+    """
+    Set the active Memori instance for the current context (thread/request).
+
+    This is essential for multi-tenant isolation - it ensures that OpenAI API calls
+    in the current thread/request use the correct Memori instance with the right
+    user_id, assistant_id, and session_id.
+
+    Args:
+        memori_instance: The Memori instance to use for this context
+        request_id: Optional unique identifier for this request (auto-generated if not provided)
+
+    Example:
+        # In a web request handler
+        memori = Memori(user_id=request.user_id, session_id=request.session_id)
+        memori.enable()
+        set_active_memori_context(memori, request_id="req-123")
+
+        # Now all OpenAI calls in this request will use this Memori instance
+        client = OpenAI()
+        response = client.chat.completions.create(...)
+
+    Security Note:
+        This function detects and warns about unexpected context switches which could
+        indicate race conditions or context leakage bugs.
+    """
+    # Check for unexpected context switches (potential race condition)
+    existing_context = _active_memori_context.get()
+    if existing_context and existing_context.is_active:
+        # Only warn if switching between DIFFERENT users (potential race condition)
+        if existing_context.memori_instance.user_id != memori_instance.user_id:
+            logger.warning(
+                f"Context switch detected: {existing_context.request_id} -> new context. "
+                f"Previous: user_id={existing_context.memori_instance.user_id}, "
+                f"New: user_id={memori_instance.user_id}"
+            )
+        # Same user re-setting context is normal, just debug log
+        else:
+            logger.debug(
+                f"Context reset for same user: user_id={memori_instance.user_id}, "
+                f"request_id={existing_context.request_id} -> {request_id or 'auto'}"
+            )
+
+    # Create new context with validation
+    context = MemoriContext(
+        memori_instance=memori_instance,
+        request_id=request_id or str(uuid.uuid4())
+    )
+    _active_memori_context.set(context)
+
+    logger.debug(
+        f"Set active Memori context: request_id={context.request_id}, "
+        f"user_id={memori_instance.user_id}, "
+        f"assistant_id={memori_instance.assistant_id}, "
+        f"session_id={memori_instance.session_id}"
+    )
+
+
+def get_active_memori_context(require_valid: bool = True):
+    """
+    Get the active Memori instance for the current context.
+
+    Args:
+        require_valid: If True, raises error if context is invalid or missing.
+                      If False, returns None for invalid/missing context.
+
+    Returns:
+        The active Memori instance, or None if not set (when require_valid=False)
+
+    Raises:
+        RuntimeError: If require_valid=True and context is missing or invalid
+
+    Security Note:
+        This function validates context age and status to prevent stale context usage.
+    """
+    context = _active_memori_context.get()
+
+    if context is None:
+        if require_valid:
+            raise RuntimeError(
+                "No active Memori context set. In multi-tenant mode, you must call "
+                "set_active_memori_context(memori_instance) before making LLM calls. "
+                "For single-tenant apps, this should happen automatically on enable()."
+            )
+        return None
+
+    # Validate context is still valid
+    is_valid, error_msg = context.validate()
+    if not is_valid:
+        if require_valid:
+            raise RuntimeError(
+                f"Active Memori context {context.request_id} is invalid: {error_msg}. "
+                f"Age: {time.time() - context.created_at:.1f}s"
+            )
+        logger.warning(
+            f"Context {context.request_id} validation failed: {error_msg}"
+        )
+        return None
+
+    return context.memori_instance
+
+
+def clear_active_memori_context():
+    """
+    Clear the active Memori context for the current thread/request.
+
+    Use this after completing a request to prevent context leakage.
+
+    Best Practice:
+        Always call this in a finally block or use the memori_context()
+        context manager to ensure cleanup happens even on exceptions.
+    """
+    context = _active_memori_context.get()
+    if context:
+        context.is_active = False
+        logger.debug(
+            f"Cleared active Memori context: request_id={context.request_id}, "
+            f"age={time.time() - context.created_at:.1f}s"
+        )
+    _active_memori_context.set(None)
 
 
 class OpenAIInterceptor:
@@ -199,232 +368,144 @@ class OpenAIInterceptor:
 
     @classmethod
     def _inject_context_for_enabled_instances(cls, options, client_type):
-        """Inject context for the active Memori instance in current request context."""
-        # Use ContextVar to get the active instance for this request (multi-tenant safe)
-        memori_instance = _active_memori_context.get()
+        """Inject context for the active Memori instance (or all enabled instances for backward compatibility)."""
+        # Check if there's an active context (multi-tenant mode)
+        active_memori = get_active_memori_context(require_valid=False)
 
-        # BACKWARD COMPATIBILITY: Fallback to single global instance if context not set
-        if memori_instance is None and len(_enabled_memori_instances) == 1:
-            memori_instance = _enabled_memori_instances[0]
-            logger.debug("Using backward-compatible single-instance mode for context injection")
+        # Use active context if set, otherwise fall back to all instances (backward compatibility)
+        memori_instances = [active_memori] if active_memori else _enabled_memori_instances
 
-        if memori_instance and memori_instance.is_enabled and (
-            memori_instance.conscious_ingest or memori_instance.auto_ingest
-        ):
-            try:
-                # Get json_data from options - handle multiple attribute name possibilities
-                json_data = None
-                for attr_name in ["json_data", "_json_data", "data"]:
-                    if hasattr(options, attr_name):
-                        json_data = getattr(options, attr_name, None)
-                        if json_data:
-                            break
+        if not memori_instances:
+            logger.debug("No Memori instances available for context injection")
+            return options
 
-                if not json_data:
-                    # Try to reconstruct from other options attributes
-                    json_data = {}
-                    if hasattr(options, "messages"):
-                        json_data["messages"] = options.messages
-                    elif hasattr(options, "_messages"):
-                        json_data["messages"] = options._messages
+        for memori_instance in memori_instances:
+            if memori_instance.is_enabled and (
+                memori_instance.conscious_ingest or memori_instance.auto_ingest
+            ):
+                try:
+                    # Get json_data from options - handle multiple attribute name possibilities
+                    json_data = None
+                    for attr_name in ["json_data", "_json_data", "data"]:
+                        if hasattr(options, attr_name):
+                            json_data = getattr(options, attr_name, None)
+                            if json_data:
+                                break
 
-                if json_data and "messages" in json_data:
-                    # This is a chat completion request - inject context
-                    logger.debug(
-                        f"OpenAI: Injecting context for {client_type} with {len(json_data['messages'])} messages"
-                    )
-                    updated_data = memori_instance._inject_openai_context(
-                        {"messages": json_data["messages"]}
-                    )
+                    if not json_data:
+                        # Try to reconstruct from other options attributes
+                        json_data = {}
+                        if hasattr(options, "messages"):
+                            json_data["messages"] = options.messages
+                        elif hasattr(options, "_messages"):
+                            json_data["messages"] = options._messages
 
-                    if updated_data.get("messages"):
-                        # Update the options with modified messages
-                        if hasattr(options, "json_data") and options.json_data:
-                            options.json_data["messages"] = updated_data["messages"]
-                        elif hasattr(options, "messages"):
-                            options.messages = updated_data["messages"]
-
+                    if json_data and "messages" in json_data:
+                        # This is a chat completion request - inject context
                         logger.debug(
-                            f"OpenAI: Successfully injected context for {client_type}"
+                            f"OpenAI: Injecting context for {client_type} with {len(json_data['messages'])} messages"
                         )
-                else:
-                    logger.debug(
-                        f"OpenAI: No messages found in options for {client_type}, skipping context injection"
-                    )
+                        updated_data = memori_instance._inject_openai_context(
+                            {"messages": json_data["messages"]}
+                        )
 
-            except Exception as e:
-                logger.error(f"Context injection failed for {client_type}: {e}")
+                        if updated_data.get("messages"):
+                            # Update the options with modified messages
+                            if hasattr(options, "json_data") and options.json_data:
+                                options.json_data["messages"] = updated_data["messages"]
+                            elif hasattr(options, "messages"):
+                                options.messages = updated_data["messages"]
+
+                            logger.debug(
+                                f"OpenAI: Successfully injected context for {client_type}"
+                            )
+                    else:
+                        logger.debug(
+                            f"OpenAI: No messages found in options for {client_type}, skipping context injection"
+                        )
+
+                except Exception as e:
+                    logger.error(f"Context injection failed for {client_type}: {e}")
 
         return options
 
     @classmethod
     def _is_internal_agent_call(cls, json_data):
-        """
-        Check if this is an internal agent processing call using multiple signals.
-
-        Uses a combination of indicators to prevent false positives:
-        1. Internal processing patterns in content
-        2. Agent-specific message structure (system + user with processing instructions)
-        3. JSON response format requests (agents request structured JSON output)
-
-        This prevents legitimate user messages that mention memory processing
-        from being incorrectly filtered.
-        """
+        """Check if this is an internal agent processing call that should not be recorded."""
         try:
-            messages = json_data.get("messages", [])
-            if not messages:
-                return False
+            openai_metadata = json_data.get("metadata", [])
 
-            # Signal 1: Count pattern matches
-            pattern_matches = 0
-            internal_patterns = [
-                "Process this conversation for enhanced memory storage:",
-                "INTERNAL_MEMORY_PROCESSING:",
-                "AGENT_PROCESSING_MODE:",
-                "[INTERNAL_MEMORI_SEARCH]",  # Retrieval agent marker for memory searches
-            ]
-
-            for message in messages:
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    for pattern in internal_patterns:
-                        if pattern in content:
-                            pattern_matches += 1
-
-            # Signal 2: Check for agent-specific message structure
-            has_agent_structure = False
-            if len(messages) >= 2:
-                # Agents typically have system message mentioning "memory" + "agent"
-                system_msg = messages[0] if messages[0].get("role") == "system" else None
-                if system_msg:
-                    system_content = system_msg.get("content", "").lower()
-                    if "memory" in system_content and ("agent" in system_content or "processing" in system_content):
-                        has_agent_structure = True
-
-            # Signal 3: Check for JSON response format requests (agents always request JSON)
-            has_json_request = False
-            for message in messages:
-                if message.get("role") == "system":
-                    content = message.get("content", "").lower()
-                    if "json" in content and ("respond" in content or "format" in content or "output" in content):
-                        has_json_request = True
-                        break
-
-            # Require pattern match AND at least one other confirming signal
-            # This prevents false positives while maintaining accurate detection
-            if pattern_matches >= 1 and (has_agent_structure or has_json_request):
-                logger.debug(
-                    f"Internal agent call detected: patterns={pattern_matches}, "
-                    f"agent_structure={has_agent_structure}, json_request={has_json_request}"
-                )
-                return True
-
-            # If only pattern matches without confirmation, log and treat as user message
-            if pattern_matches >= 1:
-                logger.debug(
-                    f"Pattern found but no confirmation signals - treating as user message"
-                )
+            # Check for specific internal agent metadata flags
+            if isinstance(openai_metadata, list):
+                internal_metadata = [
+                    "INTERNAL_MEMORY_PROCESSING",  # used in memory agent and retrieval agent
+                    "AGENT_PROCESSING_MODE",
+                    "MEMORY_AGENT_TASK",
+                ]
+                for internal in internal_metadata:
+                    if internal in openai_metadata:
+                        return True
 
             return False
 
         except Exception as e:
             logger.debug(f"Failed to check internal agent call: {e}")
-            return False  # Fail open - record if uncertain to avoid data loss
+            return False
 
     @classmethod
     def _record_conversation_for_enabled_instances(cls, options, response, client_type):
-        """
-        Record conversation to the active Memori instance in the current context.
+        """Record conversation for the active Memori instance (or all enabled instances for backward compatibility)."""
+        # Check if there's an active context (multi-tenant mode)
+        active_memori = get_active_memori_context(require_valid=False)
 
-        This ensures proper isolation in multi-tenant environments by only recording
-        to the instance that's active for the current request, not all enabled instances.
-        """
-        # Get the active Memori instance for THIS request context
-        active_memori = _active_memori_context.get()
+        # Use active context if set, otherwise fall back to all instances (backward compatibility)
+        memori_instances = [active_memori] if active_memori else _enabled_memori_instances
 
-        if active_memori and active_memori.is_enabled:
-            try:
-                json_data = getattr(options, "json_data", None) or {}
+        if not memori_instances:
+            logger.debug("No Memori instances available for conversation recording")
+            return
 
-                if "messages" in json_data:
-                    # Check if this is an internal agent processing call
-                    is_internal = cls._is_internal_agent_call(json_data)
-
-                    # Debug logging to help diagnose recording issues
-                    user_messages = [
-                        msg
-                        for msg in json_data.get("messages", [])
-                        if msg.get("role") == "user"
-                    ]
-                    if user_messages and not is_internal:
-                        user_content = user_messages[-1].get("content", "")[:50]
-                        logger.debug(
-                            f"Recording to active instance: '{user_content}...' (user_id={getattr(active_memori, 'user_id', 'unknown')})"
-                        )
-                    elif is_internal:
-                        logger.debug(
-                            "Skipping internal agent call (detected pattern match)"
-                        )
-
-                    # Skip internal agent processing calls
-                    if is_internal:
-                        return
-
-                    # Record to the active instance only
-                    active_memori._record_openai_conversation(json_data, response)
-                    logger.debug(f"Conversation recorded to instance: {getattr(active_memori, 'user_id', 'unknown')}")
-
-                elif "prompt" in json_data:
-                    # Legacy completions
-                    cls._record_legacy_completion(
-                        active_memori, json_data, response, client_type
-                    )
-
-            except Exception as e:
-                logger.error(
-                    f"Failed to record conversation for {client_type}: {e}"
-                )
-        # BACKWARD COMPATIBILITY: Fallback to global instance for single-user apps
-        elif len(_enabled_memori_instances) == 1:
-            single_instance = _enabled_memori_instances[0]
-            if single_instance.is_enabled:
+        for memori_instance in memori_instances:
+            if memori_instance.is_enabled:
                 try:
-                    logger.debug(
-                        "Using backward-compatible single-instance mode (context not set). "
-                        "For multi-tenant apps, call set_active_memori_context(memori) explicitly."
-                    )
                     json_data = getattr(options, "json_data", None) or {}
 
                     if "messages" in json_data:
+                        # Check if this is an internal agent processing call
                         is_internal = cls._is_internal_agent_call(json_data)
-                        if not is_internal:
-                            single_instance._record_openai_conversation(json_data, response)
-                            logger.debug("Conversation recorded to single global instance (backward compatibility mode)")
 
+                        # Debug logging to help diagnose recording issues
+                        user_messages = [
+                            msg
+                            for msg in json_data.get("messages", [])
+                            if msg.get("role") == "user"
+                        ]
+                        if user_messages and not is_internal:
+                            user_content = user_messages[-1].get("content", "")[:50]
+                            logger.debug(
+                                f"Recording conversation: '{user_content}...' (internal_check={is_internal})"
+                            )
+                        elif is_internal:
+                            logger.debug(
+                                "Skipping internal agent call (detected pattern match)"
+                            )
+
+                        # Skip internal agent processing calls
+                        if is_internal:
+                            continue
+
+                        # Chat completions
+                        memori_instance._record_openai_conversation(json_data, response)
                     elif "prompt" in json_data:
-                        cls._record_legacy_completion(single_instance, json_data, response, client_type)
+                        # Legacy completions
+                        cls._record_legacy_completion(
+                            memori_instance, json_data, response, client_type
+                        )
 
                 except Exception as e:
-                    logger.error(f"Failed to record conversation (legacy mode): {e}")
-
-        # Multiple instances without context: Raise error (correct behavior)
-        elif len(_enabled_memori_instances) > 1:
-            logger.error(
-                "❌ MULTI-TENANT ISOLATION ERROR: Multiple Memori instances registered but no active context set. "
-                "This is ambiguous and prevents proper tenant isolation. "
-                "Call set_active_memori_context(memori) before making OpenAI API calls in multi-tenant environments.\n\n"
-                "Example:\n"
-                "  from memori.integrations.openai_integration import set_active_memori_context\n"
-                "  memori = Memori(user_id='user123', ...)\n"
-                "  memori.enable()\n"
-                "  set_active_memori_context(memori)  # Required for multi-tenant!\n"
-                "  # Now make your OpenAI calls\n\n"
-                "See https://docs.memori.ai/multi-tenant for more info."
-            )
-
-        # No instances enabled: Silent skip (normal)
-        else:
-            logger.debug("No Memori instances enabled, skipping recording")
+                    logger.error(
+                        f"Failed to record conversation for {client_type}: {e}"
+                    )
 
     @classmethod
     def _record_legacy_completion(
@@ -539,28 +620,32 @@ class OpenAIInterceptor:
 
 def register_memori_instance(memori_instance):
     """
-    DEPRECATED: Register a Memori instance for automatic OpenAI interception.
-
-    This function is deprecated and will be removed in v2.0.0.
-    Use set_active_memori_context() instead for proper multi-tenant isolation.
+    Register a Memori instance for automatic OpenAI interception.
 
     Args:
         memori_instance: Memori instance to register
-    """
-    import warnings
-    warnings.warn(
-        "register_memori_instance() is deprecated and will be removed in v2.0.0. "
-        "Use set_active_memori_context(memori) instead for proper multi-tenant isolation. "
-        "See https://docs.memori.ai/multi-tenant for migration guide.",
-        DeprecationWarning,
-        stacklevel=2
-    )
 
+    Note:
+        For multi-tenant applications, you should also call set_active_memori_context()
+        to specify which instance to use for the current request/thread.
+
+        For single-tenant applications, this will automatically set the active context
+        if there's only one registered instance.
+    """
     global _enabled_memori_instances
 
     if memori_instance not in _enabled_memori_instances:
         _enabled_memori_instances.append(memori_instance)
-        logger.debug("⚠️  Registered Memori instance using deprecated method")
+        logger.debug(
+            f"Registered Memori instance for OpenAI interception "
+            f"(user_id={memori_instance.user_id}, assistant_id={memori_instance.assistant_id}, "
+            f"session_id={memori_instance.session_id})"
+        )
+
+        # Auto-set context if this is the only instance (backward compatibility)
+        if len(_enabled_memori_instances) == 1 and not get_active_memori_context(require_valid=False):
+            set_active_memori_context(memori_instance)
+            logger.debug("Auto-set active context for single Memori instance")
 
     # Ensure OpenAI is patched
     OpenAIInterceptor.patch_openai()
@@ -568,28 +653,25 @@ def register_memori_instance(memori_instance):
 
 def unregister_memori_instance(memori_instance):
     """
-    DEPRECATED: Unregister a Memori instance from automatic OpenAI interception.
-
-    This function is deprecated and will be removed in v2.0.0.
-    Use clear_active_memori_context() instead for proper multi-tenant isolation.
+    Unregister a Memori instance from automatic OpenAI interception.
 
     Args:
         memori_instance: Memori instance to unregister
     """
-    import warnings
-    warnings.warn(
-        "unregister_memori_instance() is deprecated and will be removed in v2.0.0. "
-        "Use clear_active_memori_context() instead (usually not needed as context auto-clears). "
-        "See https://docs.memori.ai/multi-tenant for migration guide.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-
     global _enabled_memori_instances
 
     if memori_instance in _enabled_memori_instances:
         _enabled_memori_instances.remove(memori_instance)
-        logger.debug("⚠️  Unregistered Memori instance using deprecated method")
+        logger.debug(
+            f"Unregistered Memori instance from OpenAI interception "
+            f"(user_id={memori_instance.user_id}, assistant_id={memori_instance.assistant_id}, "
+            f"session_id={memori_instance.session_id})"
+        )
+
+        # Clear active context if this was the active instance
+        active = get_active_memori_context(require_valid=False)
+        if active == memori_instance:
+            clear_active_memori_context()
 
     # If no more instances, unpatch OpenAI
     if not _enabled_memori_instances:
@@ -690,62 +772,3 @@ def create_openai_client(memori_instance, provider_config=None, **kwargs):
     except Exception as e:
         logger.error(f"Failed to create OpenAI client: {e}")
         raise
-
-
-# Multi-Tenancy Context Management Functions
-
-def set_active_memori_context(memori_instance):
-    """
-    Set the active Memori instance for the current request context.
-
-    This ensures that OpenAI API calls made within this context are recorded
-    ONLY to this specific Memori instance, providing proper isolation in
-    multi-tenant environments.
-
-    Args:
-        memori_instance: The Memori instance to set as active
-
-    Example:
-        # In your API endpoint:
-        memori = await manager.get_instance(user_id=user_id, ...)
-        set_active_memori_context(memori)  # Set for this request
-
-        # Now all OpenAI calls record to this instance only
-        response = openai_client.chat.completions.create(...)
-    """
-    _active_memori_context.set(memori_instance)
-    logger.debug(f"Set active Memori context: user_id={getattr(memori_instance, 'user_id', 'unknown')}")
-
-
-def get_active_memori_context():
-    """
-    Get the currently active Memori instance for this request context.
-
-    Returns:
-        The active Memori instance, or None if no instance is set
-    """
-    return _active_memori_context.get()
-
-
-def clear_active_memori_context():
-    """
-    Clear the active Memori instance from the current request context.
-
-    This is usually not necessary as context is automatically cleared when
-    the request completes, but can be called explicitly if needed.
-    """
-    _active_memori_context.set(None)
-    logger.debug("Cleared active Memori context")
-
-
-def get_enabled_instances():
-    """
-    Get the list of currently enabled Memori instances.
-
-    Returns:
-        list: List of enabled Memori instances (global registry)
-
-    Note: This returns the global registry. For multi-tenant apps,
-    use get_active_memori_context() to get the request-specific instance.
-    """
-    return _enabled_memori_instances.copy()

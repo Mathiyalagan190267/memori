@@ -678,27 +678,24 @@ class Memori:
 
             from sqlalchemy import text
 
-            with self.db_manager._get_connection() as connection:
-                # Database-agnostic duplicate check with safer pattern matching
-                # Escape special LIKE characters to prevent SQL injection
-                escaped_memory_id = memory_id.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-                conscious_pattern = f"conscious_{escaped_memory_id}_%"
+            # SECURITY FIX: Use ORM methods instead of raw SQL to prevent injection
+            # Check for exact match or conscious-prefixed memories
+            from sqlalchemy import or_
 
-                existing_check = connection.execute(
-                    text(
-                        """SELECT COUNT(*) FROM short_term_memory
-                           WHERE user_id = :user_id
-                           AND (memory_id = :exact_id
-                               OR memory_id LIKE :conscious_pattern ESCAPE '\\')"""
-                    ),
-                    {
-                        "user_id": self.user_id or "default",
-                        "exact_id": memory_id,
-                        "conscious_pattern": conscious_pattern,
-                    },
-                )
+            with self.db_manager.SessionLocal() as session:
+                # Safe parameterized query using ORM - no SQL injection possible
+                existing_count = session.query(
+                    self.db_manager.ShortTermMemory
+                ).filter(
+                    self.db_manager.ShortTermMemory.user_id == (self.user_id or "default"),
+                    or_(
+                        self.db_manager.ShortTermMemory.memory_id == memory_id,
+                        self.db_manager.ShortTermMemory.memory_id.like(
+                            f"conscious_{memory_id}_%"
+                        )
+                    )
+                ).count()
 
-                existing_count = existing_check.scalar()
                 if existing_count > 0:
                     logger.debug(
                         f"[CONSCIOUS] Skipping duplicate memory {memory_id[:8]}... - already exists in short-term memory"
@@ -1882,8 +1879,19 @@ class Memori:
             # Run async processing in new event loop
             import threading
 
+            # CRITICAL FIX: Capture context before creating thread
+            from ..integrations.openai_integration import set_active_memori_context
+
+            # Ensure this instance is set as active
+            set_active_memori_context(self)
+            logger.debug(f"Set context before memory processing: user_id={self.user_id}, chat_id={chat_id[:8]}...")
+
             def run_memory_processing():
                 """Run memory processing with improved event loop management"""
+                # CRITICAL FIX: Set context in the new thread
+                set_active_memori_context(self)
+                logger.debug(f"Context set in memory processing thread: user_id={self.user_id}")
+
                 new_loop = None
                 try:
                     # Check if we're already in an async context
@@ -2109,6 +2117,12 @@ class Memori:
     ):
         """Schedule memory processing (async if possible, sync fallback)."""
         try:
+            # CRITICAL FIX: Set context before scheduling async task
+            # Context DOES propagate to tasks created with create_task(), but we ensure it's set
+            from ..integrations.openai_integration import set_active_memori_context
+            set_active_memori_context(self)
+            logger.debug(f"Context set before scheduling async memory processing: user_id={self.user_id}")
+
             loop = asyncio.get_running_loop()
             task = loop.create_task(
                 self._process_memory_async(chat_id, user_input, ai_output, model)
@@ -2131,6 +2145,14 @@ class Memori:
         if not self.memory_agent:
             logger.warning("Memory agent not available, skipping memory ingestion")
             return
+
+        # CRITICAL FIX: Ensure context is set before making any OpenAI calls
+        # This is a safety check in case context wasn't propagated correctly
+        from ..integrations.openai_integration import set_active_memori_context, get_active_memori_context
+        current_context = get_active_memori_context()
+        if current_context != self:
+            logger.debug(f"Context mismatch detected in async processing, setting to user_id={self.user_id}")
+            set_active_memori_context(self)
 
         try:
             # Create conversation context
@@ -2493,8 +2515,24 @@ class Memori:
             except RuntimeError:
                 # No event loop running, create a new thread for async tasks
                 import threading
+                import contextvars
+
+                # CRITICAL FIX: Capture the current context before creating the thread
+                # This ensures the Memori instance context propagates to background tasks
+                from ..integrations.openai_integration import set_active_memori_context
+
+                # Capture the context in the current thread
+                ctx = contextvars.copy_context()
+
+                # Ensure this instance is set as active before copying context
+                set_active_memori_context(self)
+                logger.debug(f"Captured context for background thread: user_id={self.user_id}")
 
                 def run_background_loop():
+                    # Set the context in the new thread
+                    set_active_memori_context(self)
+                    logger.debug(f"Set context in background thread: user_id={self.user_id}")
+
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     try:
@@ -2506,7 +2544,7 @@ class Memori:
 
                 thread = threading.Thread(target=run_background_loop, daemon=True)
                 thread.start()
-                logger.info("Background analysis started in separate thread")
+                logger.info(f"Background analysis started in separate thread for user_id={self.user_id}")
                 return
 
             # If we have a running loop, schedule the task
